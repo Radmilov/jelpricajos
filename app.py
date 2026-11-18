@@ -48,7 +48,7 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(
-    title="Vučić Speaking Monitor API",
+    title="jelpricajos API",
     version=API_VERSION,
     description=(
         "Real-time detection of whether Aleksandar Vučić is speaking in the National Assembly "

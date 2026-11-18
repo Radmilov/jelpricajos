@@ -1,9 +1,9 @@
-// Vučić Mute — content script on youtube.com.
+// jelpricajos — content script on youtube.com.
 // Blurs the video picture while the background worker says so. Only the picture is
 // affected; the page, comments and controls stay usable.
 (() => {
-  const CLASS = 'vucic-mute-blur';
-  const STYLE_ID = 'vucic-mute-blur-style';
+  const CLASS = 'jelpricajos-blur';
+  const STYLE_ID = 'jelpricajos-blur-style';
 
   function ensureStyle() {
     if (document.getElementById(STYLE_ID)) return;

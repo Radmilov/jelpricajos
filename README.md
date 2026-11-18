@@ -1,4 +1,4 @@
-# Vučić Speaking Monitor
+# jelpricajos
 
 A local web dashboard and background service that watches the
 [`@ParlamentSrbija`](https://www.youtube.com/@ParlamentSrbija/live) YouTube live stream,
@@ -37,7 +37,7 @@ change the state.
 * **Offline screen:** "Prenos uživo nije aktivan", a dictionary-style definition of *logoreja*, and
   a countdown to the next session. The channel doesn't schedule streams in advance, so set the
   time yourself:
-  `sudo bash /opt/vucic-monitor/deploy/next-session.sh "2026-11-19 10:00"` (Serbian time),
+  `sudo bash /opt/jelpricajos/deploy/next-session.sh "2026-11-19 10:00"` (Serbian time),
   or `… clear`. A stream scheduled on YouTube, if one ever appears, takes precedence.
 * **ROI:** `x 0.22–0.82 W`, `y 0.80–1.00 H`, a tight crop around the caption, calibrated against
   the live stream. The group line sits at ~0.93–0.99 H. The top edge also covers the large animated
@@ -115,7 +115,7 @@ of the same name.
 ```powershell
 winget install --id Gyan.FFmpeg -e        # optional (or: scoop install ffmpeg / choco install ffmpeg)
 winget install --id DenoLand.Deno -e      # recommended: JS runtime yt-dlp uses for YouTube
-cd path\to\jelprica
+cd path\to\jelpricajos
 py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
@@ -126,7 +126,7 @@ python app.py
 
 ```bash
 brew install ffmpeg deno
-cd path/to/jelprica
+cd path/to/jelpricajos
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 python app.py
@@ -137,7 +137,7 @@ python app.py
 ```bash
 sudo apt update && sudo apt install -y ffmpeg python3-venv
 curl -fsSL https://deno.land/install.sh | sh     # recommended for yt-dlp
-cd path/to/jelprica
+cd path/to/jelpricajos
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 python app.py
@@ -168,9 +168,9 @@ ARM64, with at least 1 GB of RAM. On small machines the installer adds swap.
 |---|---|
 | `deploy/upload.ps1` | Run on Windows: packs the project, uploads it over SSH, runs the installer |
 | `deploy/install.sh` | Run on the server: idempotent install or update |
-| `deploy/vucic-monitor.service` | systemd unit (auto-start, restart on crash, sandboxed) |
-| `deploy/vucic-quicktunnel.service` | Temporary `trycloudflare.com` tunnel, used when no token is given |
-| `deploy/vucic-monitor.env.example` | Server settings, installed as `/etc/vucic-monitor.env` |
+| `deploy/jelpricajos.service` | systemd unit (auto-start, restart on crash, sandboxed) |
+| `deploy/jelpricajos-tunnel.service` | Temporary `trycloudflare.com` tunnel, used when no token is given |
+| `deploy/jelpricajos.env.example` | Server settings, installed as `/etc/jelpricajos.env` |
 | `deploy/status.sh` | Health overview: services, stream and speaker, tunnel URL, CPU/RAM |
 | `deploy/next-session.sh` | Set or clear the next-session countdown (Serbian time) |
 
@@ -191,7 +191,7 @@ Any other Ubuntu VPS works the same way (Hetzner, DigitalOcean, …).
 ### 2. Deploy from Windows
 
 ```powershell
-cd path\to\jelprica
+cd path\to\jelpricajos
 # quick tunnel (random URL):
 powershell -ExecutionPolicy Bypass -File .\deploy\upload.ps1 -Server ubuntu@<IP> -Key $HOME\.ssh\oracle.key
 # or with a permanent tunnel on your domain:
@@ -210,7 +210,7 @@ Options:
 
 1. Add your domain to Cloudflare.
 2. Go to **Zero Trust → Networks → Tunnels → Create a tunnel → Cloudflared** and copy the token.
-3. Under **Public hostname**, set `vucic.yourdomain.rs` → `HTTP` → `localhost:8000`.
+3. Under **Public hostname**, set `jelpricajos.yourdomain.rs` → `HTTP` → `localhost:8000`.
 4. Re-run `upload.ps1` with `-TunnelToken <TOKEN>`. This replaces the quick tunnel. SSE works on
    named tunnels.
 
@@ -224,8 +224,8 @@ Options:
 * The installer turns on automatic security updates and **fail2ban** for SSH (5 failures, 1 h ban).
 * It switches SSH to **key-only** login, but only if the account running it already has an
   `authorized_keys` file, so a password setup can't be locked out. Opt out with `HARDEN=0`.
-* The service runs as an unprivileged `vucic` user under systemd sandboxing. It can write only
-  to `/var/lib/vucic-monitor`.
+* The service runs as an unprivileged `jelpricajos` user under systemd sandboxing. It can write only
+  to `/var/lib/jelpricajos`.
 * **YouTube cookies:** if you need them, export them from a **separate, throwaway Google account**.
   Anyone who gets the server also gets that account's session.
 
@@ -233,14 +233,14 @@ Options:
 
 ```bash
 ssh -i ~/.ssh/oracle.key ubuntu@<IP>
-sudo bash /opt/vucic-monitor/deploy/status.sh     # health + URL
-journalctl -u vucic-monitor -f                    # live logs
-sudo nano /etc/vucic-monitor.env && sudo systemctl restart vucic-monitor
+sudo bash /opt/jelpricajos/deploy/status.sh     # health + URL
+journalctl -u jelpricajos -f                    # live logs
+sudo nano /etc/jelpricajos.env && sudo systemctl restart jelpricajos
 ```
 
 Paths on the server:
-* Database: `/var/lib/vucic-monitor/speeches.db`
-* App: `/opt/vucic-monitor`
+* Database: `/var/lib/jelpricajos/speeches.db`
+* App: `/opt/jelpricajos`
 
 After moving to the VPS, shut down the local copy, and point the Chrome extension at the new URL.
 
@@ -297,7 +297,7 @@ es.addEventListener('status', (e) => console.log(JSON.parse(e.data).vucic_speaki
 * **Admin endpoint:** `/api/simulate` only works from this machine. Requests that arrive through
   a proxy or tunnel are refused unless they send `X-Admin-Token` matching `ADMIN_TOKEN`.
 
-## Chrome extension: "Vučić Mute"
+## Chrome extension: "jelpricajos"
 
 The extension in `extension/` mutes YouTube tabs, and can optionally blur the video, while Vučić is speaking.
 

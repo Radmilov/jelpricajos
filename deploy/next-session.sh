@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Set or clear the "next session" countdown shown on the site (run on the server).
 #
-#   sudo bash /opt/vucic-monitor/deploy/next-session.sh "2026-11-19 10:00"   # Serbian time
-#   sudo bash /opt/vucic-monitor/deploy/next-session.sh clear
+#   sudo bash /opt/jelpricajos/deploy/next-session.sh "2026-11-19 10:00"   # Serbian time
+#   sudo bash /opt/jelpricajos/deploy/next-session.sh clear
 #
 # A stream scheduled on the YouTube channel, if there ever is one, takes precedence.
 set -euo pipefail

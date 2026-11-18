@@ -1,4 +1,4 @@
-// Vučić Mute — service worker.
+// jelpricajos — service worker.
 // Polls the monitor's public API and mutes YouTube tabs while Vučić (and optionally
 // MPs of his party group) is speaking. It only ever unmutes tabs that it muted itself,
 // so tabs you muted by hand stay muted.

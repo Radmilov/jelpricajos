@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install / update the Vučić Speaking Monitor on an Ubuntu 22.04/24.04 VPS (x86_64 or arm64).
+# Install / update jelpricajos on an Ubuntu 22.04/24.04 VPS (x86_64 or arm64).
 #
 # Run from the unpacked project folder:
 #   sudo bash deploy/install.sh                 # install or update
@@ -9,8 +9,8 @@
 # the env file and the cookies.
 set -euo pipefail
 
-APP_NAME="vucic-monitor"
-APP_USER="vucic"
+APP_NAME="jelpricajos"
+APP_USER="jelpricajos"
 APP_DIR="/opt/${APP_NAME}"
 DATA_DIR="/var/lib/${APP_NAME}"
 ENV_FILE="/etc/${APP_NAME}.env"
@@ -35,8 +35,8 @@ if (( mem_mb < 2500 )) && ! swapon --show | grep -q .; then
 fi
 if (( mem_mb < 2500 )); then
   # Prefer keeping the app in RAM; use swap only as a safety net.
-  echo 'vm.swappiness=10' > /etc/sysctl.d/90-vucic-swap.conf
-  sysctl -q -p /etc/sysctl.d/90-vucic-swap.conf || true
+  echo 'vm.swappiness=10' > /etc/sysctl.d/90-jelpricajos-swap.conf
+  sysctl -q -p /etc/sysctl.d/90-jelpricajos-swap.conf || true
 fi
 
 # ---------------------------------------------------------------- system packages
@@ -70,7 +70,7 @@ EOF
   systemctl enable --now unattended-upgrades >/dev/null 2>&1 || true
 
   # Ban IPs that keep failing SSH logins (5 failures in 10 min -> 1 h ban).
-  cat > /etc/fail2ban/jail.d/vucic-sshd.local <<'EOF'
+  cat > /etc/fail2ban/jail.d/jelpricajos-sshd.local <<'EOF'
 [sshd]
 enabled  = true
 backend  = systemd
@@ -87,8 +87,8 @@ EOF
   LOGIN_HOME="$(getent passwd "$LOGIN_USER" | cut -d: -f6)"
   if [[ -s "${LOGIN_HOME}/.ssh/authorized_keys" ]]; then
     mkdir -p /etc/ssh/sshd_config.d
-    cat > /etc/ssh/sshd_config.d/10-vucic-hardening.conf <<'EOF'
-# Added by vucic-monitor deploy/install.sh
+    cat > /etc/ssh/sshd_config.d/10-jelpricajos-hardening.conf <<'EOF'
+# Added by jelpricajos deploy/install.sh
 PasswordAuthentication no
 KbdInteractiveAuthentication no
 PermitRootLogin prohibit-password
@@ -98,7 +98,7 @@ EOF
       systemctl reload ssh 2>/dev/null || systemctl reload sshd 2>/dev/null || true
       echo "  SSH: password login disabled (key-only)"
     else
-      rm -f /etc/ssh/sshd_config.d/10-vucic-hardening.conf
+      rm -f /etc/ssh/sshd_config.d/10-jelpricajos-hardening.conf
       echo "  SSH: config check failed, left unchanged"
     fi
   else
@@ -153,7 +153,7 @@ fi
 # ---------------------------------------------------------------- config
 if [[ ! -f "$ENV_FILE" ]]; then
   log "Writing ${ENV_FILE}"
-  install -m 640 -o root -g "$APP_USER" "${SRC_DIR}/deploy/vucic-monitor.env.example" "$ENV_FILE"
+  install -m 640 -o root -g "$APP_USER" "${SRC_DIR}/deploy/jelpricajos.env.example" "$ENV_FILE"
 fi
 # Use cookies automatically if present and not configured yet.
 if [[ -f "${DATA_DIR}/cookies.txt" ]] && ! grep -q '^YTDLP_COOKIES_FILE=' "$ENV_FILE"; then
@@ -168,7 +168,7 @@ sudo -u "$APP_USER" HOME="$DATA_DIR" "${APP_DIR}/.venv/bin/python" -c \
 
 # ---------------------------------------------------------------- systemd
 log "Installing systemd service"
-install -m 644 "${SRC_DIR}/deploy/vucic-monitor.service" "/etc/systemd/system/${APP_NAME}.service"
+install -m 644 "${SRC_DIR}/deploy/jelpricajos.service" "/etc/systemd/system/${APP_NAME}.service"
 systemctl daemon-reload
 systemctl enable "${APP_NAME}" >/dev/null
 systemctl restart "${APP_NAME}"
@@ -183,7 +183,7 @@ fi
 
 if [[ -n "${CF_TUNNEL_TOKEN:-}" ]]; then
   log "Configuring permanent Cloudflare tunnel"
-  systemctl disable --now vucic-quicktunnel 2>/dev/null || true
+  systemctl disable --now jelpricajos-tunnel 2>/dev/null || true
   if systemctl list-unit-files | grep -q '^cloudflared.service'; then
     cloudflared service uninstall >/dev/null 2>&1 || true
   fi
@@ -192,16 +192,16 @@ if [[ -n "${CF_TUNNEL_TOKEN:-}" ]]; then
 elif ! systemctl is-enabled cloudflared >/dev/null 2>&1; then
   # Only (re)start the quick tunnel when it is new or its unit changed: every restart
   # creates a NEW random URL, which would break links people already have.
-  UNIT=/etc/systemd/system/vucic-quicktunnel.service
-  if ! cmp -s "${SRC_DIR}/deploy/vucic-quicktunnel.service" "$UNIT"; then
+  UNIT=/etc/systemd/system/jelpricajos-tunnel.service
+  if ! cmp -s "${SRC_DIR}/deploy/jelpricajos-tunnel.service" "$UNIT"; then
     log "Starting a temporary quick tunnel (random *.trycloudflare.com URL)"
-    install -m 644 "${SRC_DIR}/deploy/vucic-quicktunnel.service" "$UNIT"
+    install -m 644 "${SRC_DIR}/deploy/jelpricajos-tunnel.service" "$UNIT"
     systemctl daemon-reload
-    systemctl enable vucic-quicktunnel >/dev/null
-    systemctl restart vucic-quicktunnel
+    systemctl enable jelpricajos-tunnel >/dev/null
+    systemctl restart jelpricajos-tunnel
   else
     log "Quick tunnel already running: keeping its URL"
-    systemctl enable --now vucic-quicktunnel >/dev/null
+    systemctl enable --now jelpricajos-tunnel >/dev/null
   fi
   TUNNEL_MODE="quick"
 else
@@ -223,7 +223,7 @@ echo
 if [[ "$TUNNEL_MODE" == "quick" ]]; then
   URL=""
   for _ in $(seq 1 30); do
-    URL=$(journalctl -u vucic-quicktunnel --no-pager -o cat 2>/dev/null \
+    URL=$(journalctl -u jelpricajos-tunnel --no-pager -o cat 2>/dev/null \
           | grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' | tail -1 || true)
     [[ -n "$URL" ]] && break
     sleep 2

@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Deploys (or updates) the Vučić monitor on a Linux VPS from this Windows machine.
+  Deploys (or updates) jelpricajos on a Linux VPS from this Windows machine.
 
 .EXAMPLE
   .\deploy\upload.ps1 -Server ubuntu@203.0.113.10 -Key $HOME\.ssh\oracle.key
@@ -23,7 +23,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 $Root = Split-Path -Parent $PSScriptRoot
-$Stage = Join-Path $env:TEMP ("vucic-deploy-" + [guid]::NewGuid().ToString("N").Substring(0, 8))
+$Stage = Join-Path $env:TEMP ("jelpricajos-deploy-" + [guid]::NewGuid().ToString("N").Substring(0, 8))
 New-Item -ItemType Directory -Path $Stage | Out-Null
 
 # Use the Windows-bundled tools explicitly (Git for Windows ships incompatible tar/ssh builds).
@@ -68,9 +68,9 @@ try {
   }
 
   Write-Host "==> Uploading to $Server" -ForegroundColor Cyan
-  & $Ssh @sshArgs $Server "rm -rf ~/vucic-upload && mkdir -p ~/vucic-upload"
+  & $Ssh @sshArgs $Server "rm -rf ~/jelpricajos-upload && mkdir -p ~/jelpricajos-upload"
   if ($LASTEXITCODE -ne 0) { throw "ssh connection failed" }
-  & $Scp @sshArgs @files "${Server}:~/vucic-upload/"
+  & $Scp @sshArgs @files "${Server}:~/jelpricajos-upload/"
   if ($LASTEXITCODE -ne 0) { throw "upload failed" }
 
   Write-Host "==> Installing on the server (first run takes 5-15 minutes)" -ForegroundColor Cyan
@@ -78,7 +78,7 @@ try {
   if ($TunnelToken) { $envPrefix = "CF_TUNNEL_TOKEN='$TunnelToken' " }
   $remote = @(
     "set -e",
-    "cd ~/vucic-upload",
+    "cd ~/jelpricajos-upload",
     "rm -rf src && mkdir src && tar -xzf app.tgz -C src",
     "mkdir -p src/data",
     "if [ -f speeches.db ]; then mv speeches.db src/data/; fi",
@@ -92,7 +92,7 @@ try {
 
   Write-Host ""
   Write-Host "Deployed. Check status any time with:" -ForegroundColor Green
-  Write-Host "  ssh $($sshArgs -join ' ') $Server sudo bash /opt/vucic-monitor/deploy/status.sh"
+  Write-Host "  ssh $($sshArgs -join ' ') $Server sudo bash /opt/jelpricajos/deploy/status.sh"
 }
 finally {
   Remove-Item -Recurse -Force $Stage -ErrorAction SilentlyContinue

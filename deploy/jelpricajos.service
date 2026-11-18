@@ -1,5 +1,5 @@
 [Unit]
-Description=Vučić Speaking Monitor (Parlament Srbija OCR + dashboard)
+Description=jelpricajos (Parlament Srbija OCR + dashboard)
 After=network-online.target
 Wants=network-online.target
 
@@ -7,15 +7,15 @@ Wants=network-online.target
 Type=simple
 User=vucic
 Group=vucic
-WorkingDirectory=/opt/vucic-monitor
-EnvironmentFile=/etc/vucic-monitor.env
-Environment=HOME=/var/lib/vucic-monitor
+WorkingDirectory=/opt/jelpricajos
+EnvironmentFile=/etc/jelpricajos.env
+Environment=HOME=/var/lib/jelpricajos
 Environment=PYTHONUNBUFFERED=1
 Environment=PYTHONWARNINGS=ignore
 # Fewer glibc malloc arenas: noticeably lower RSS for PyTorch on small (1 GB) VPSes.
 Environment=MALLOC_ARENA_MAX=2
-Environment=PATH=/opt/vucic-monitor/.venv/bin:/usr/local/bin:/usr/bin:/bin
-ExecStart=/opt/vucic-monitor/.venv/bin/python /opt/vucic-monitor/app.py
+Environment=PATH=/opt/jelpricajos/.venv/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/opt/jelpricajos/.venv/bin/python /opt/jelpricajos/app.py
 Restart=always
 RestartSec=5
 # Stop gracefully so an in-progress speech is saved.
@@ -27,7 +27,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/var/lib/vucic-monitor
+ReadWritePaths=/var/lib/jelpricajos
 ProtectKernelTunables=true
 ProtectControlGroups=true
 RestrictSUIDSGID=true

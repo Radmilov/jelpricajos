@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Quick health overview of the Vučić monitor on the VPS:  sudo bash /opt/vucic-monitor/deploy/status.sh
+# Quick health overview of jelpricajos on the VPS:  sudo bash /opt/jelpricajos/deploy/status.sh
 set -uo pipefail
 
 echo "== Services"
-for svc in vucic-monitor cloudflared vucic-quicktunnel; do
+for svc in jelpricajos cloudflared jelpricajos-tunnel; do
   if systemctl list-unit-files "${svc}.service" --no-legend 2>/dev/null | grep -q .; then
     printf '  %-20s %s\n' "$svc" "$(systemctl is-active "$svc")"
   fi
@@ -19,10 +19,10 @@ print(f"  speaker: {d['speaker_state']}")
 print(f"  last frame: {d.get('last_frame_at')}")
 PY
 else
-  echo "  not responding — check: journalctl -u vucic-monitor -n 50"
+  echo "  not responding — check: journalctl -u jelpricajos -n 50"
 fi
 
-URL=$(journalctl -u vucic-quicktunnel --no-pager -o cat 2>/dev/null \
+URL=$(journalctl -u jelpricajos-tunnel --no-pager -o cat 2>/dev/null \
       | grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' | tail -1)
 [[ -n "${URL:-}" ]] && echo "== Quick tunnel URL: $URL"
 
@@ -31,7 +31,7 @@ if command -v fail2ban-client >/dev/null; then
   banned=$(fail2ban-client status sshd 2>/dev/null | awk -F': *' '/Currently banned/ {print $2}')
   echo "  fail2ban sshd: ${banned:-?} IP(s) currently banned"
 fi
-if [[ -f /etc/ssh/sshd_config.d/10-vucic-hardening.conf ]]; then
+if [[ -f /etc/ssh/sshd_config.d/10-jelpricajos-hardening.conf ]]; then
   echo "  SSH: key-only login"
 else
   echo "  SSH: password login allowed"
@@ -41,7 +41,7 @@ if [[ -f /var/run/reboot-required ]]; then
 fi
 
 echo "== Resources"
-pid=$(systemctl show -p MainPID --value vucic-monitor)
+pid=$(systemctl show -p MainPID --value jelpricajos)
 if [[ -n "$pid" && "$pid" != "0" ]]; then
   ps -o pid,pcpu,rss,etime,cmd --ppid "$pid" -p "$pid" | awk 'NR==1 {print "  "$0; next} {$3=int($3/1024)"MB"; print "  "$0}'
 fi
