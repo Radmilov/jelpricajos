@@ -1,0 +1,917 @@
+<!doctype html>
+<html lang="sr-Latn">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Vučić Monitor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js" defer></script>
+  <style>
+    :root {
+      --bg: #FAFAFA;
+      --ink: #111111;
+      --muted: #666666;
+      --faint: #999999;
+      --line: #E4E4E4;
+      --hover: #F0F0F0;
+      --alert: #D92D20;   /* accent 1: Vučić speaking / live */
+      --info: #2557D6;    /* accent 2: party member / focus */
+      --ok: #1F7A3F;
+      --sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+      --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+      --t: 150ms ease;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0D0D0D;
+        --ink: #EDEDED;
+        --muted: #8A8A8A;
+        --faint: #5C5C5C;
+        --line: #222222;
+        --hover: #161616;
+        --alert: #FF5A4E;
+        --info: #6E95FF;
+        --ok: #4CC17A;
+      }
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      margin: 0; background: var(--bg); color: var(--ink);
+      font-family: var(--sans); font-size: clamp(14px, 0.9rem + 0.15vw, 16px); line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: inherit; text-decoration: underline; text-decoration-color: var(--faint); text-underline-offset: 3px; transition: text-decoration-color var(--t); }
+    a:hover { text-decoration-color: var(--ink); }
+    :focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+
+    .wrap { max-width: 720px; margin: 0 auto; padding: clamp(24px, 5vw, 64px) 16px 48px; }
+    .mono { font-family: var(--mono); }
+    .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+    .label {
+      font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: 0.08em;
+      text-transform: uppercase; color: var(--muted);
+    }
+    .muted { color: var(--muted); }
+    .hidden { display: none !important; }
+
+    /* Header */
+    header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 12px 24px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
+    h1 { margin: 0; font-size: 15px; font-weight: 700; letter-spacing: -0.02em; }
+    .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
+    .status { display: inline-flex; align-items: center; gap: 8px; }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
+    .dot.live { background: var(--alert); animation: blink 1.6s steps(1, end) infinite; }
+    .dot.wait { background: var(--muted); }
+    @keyframes blink { 50% { opacity: 0.25; } }
+    .seg { display: inline-flex; border: 1px solid var(--line); }
+    .seg button { border: 0; border-radius: 0; padding: 2px 8px; }
+    .seg button + button { border-left: 1px solid var(--line); }
+    .seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+
+    button {
+      font: 500 12px/1.4 var(--mono); color: var(--ink); background: transparent;
+      border: 1px solid var(--line); border-radius: 0; padding: 7px 12px; cursor: pointer;
+      transition: background-color var(--t), border-color var(--t), color var(--t);
+    }
+    button:hover { background: var(--hover); border-color: var(--muted); }
+    button.on { border-color: var(--ok); color: var(--ok); }
+    button.arm { border-color: var(--alert); color: var(--alert); }
+
+    .controls { display: flex; flex-wrap: wrap; gap: 8px; padding: 16px 0; border-bottom: 1px solid var(--line); }
+
+    /* Hero */
+    .hero { padding: clamp(40px, 9vw, 88px) 0 clamp(32px, 7vw, 64px); border-bottom: 1px solid var(--line); transition: border-color var(--t); }
+    .hero.alert { border-bottom: 2px solid var(--alert); }
+    .hero h2 {
+      margin: 12px 0 0; font-weight: 800; letter-spacing: -0.03em; line-height: 1.02;
+      font-size: clamp(2.25rem, 1.2rem + 5.2vw, 4.25rem);
+    }
+    .hero.alert h2 { color: var(--alert); }
+    .hero .sub { margin: 16px 0 0; max-width: 52ch; color: var(--muted); }
+    .hero .tag { color: var(--info); }
+    .timer { margin-top: 32px; }
+    .timer .num { display: block; margin-top: 4px; font-size: clamp(3rem, 1.5rem + 8vw, 6rem); font-weight: 500; letter-spacing: -0.04em; line-height: 1; }
+
+    /* Dictionary-style definition (offline screen) */
+    .define { margin: 40px 0 0; padding: 20px 0 0; border-top: 1px solid var(--line); max-width: 56ch; }
+    .define-term { font-size: clamp(1.5rem, 1rem + 2vw, 2rem); font-weight: 700; letter-spacing: -0.03em; font-style: italic; }
+    .define-meta { margin-top: 4px; font-size: 11px; color: var(--muted); letter-spacing: 0.04em; }
+    .define-text { margin: 12px 0 0; color: var(--ink); line-height: 1.6; }
+
+    /* Stats grid with hairlines */
+    .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line); border-bottom: 1px solid var(--line); }
+    .stat { background: var(--bg); padding: 20px 16px 20px 0; }
+    .stat:nth-child(even) { padding-left: 16px; }
+    .stat .v { margin-top: 6px; font-size: clamp(1.5rem, 1rem + 2vw, 2rem); font-weight: 500; letter-spacing: -0.03em; }
+    #statLast { font-size: clamp(1.05rem, 0.85rem + 0.9vw, 1.3rem); line-height: 1.25; padding-top: 6px; }
+    .stat .s { margin-top: 2px; font-size: 12px; color: var(--muted); }
+    @media (min-width: 640px) {
+      .stats { grid-template-columns: repeat(4, 1fr); }
+      .stat, .stat:nth-child(even) { padding: 20px 16px; }
+      .stat:first-child { padding-left: 0; }
+    }
+
+    section.block { padding: 32px 0; border-bottom: 1px solid var(--line); }
+    section.block > .label { display: block; margin-bottom: 16px; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { text-align: left; font: 500 11px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); padding: 0 12px 8px 0; border-bottom: 1px solid var(--line); }
+    td { padding: 10px 12px 10px 0; border-bottom: 1px solid var(--line); font-family: var(--mono); font-variant-numeric: tabular-nums; }
+    th:last-child, td:last-child { text-align: right; padding-right: 0; }
+    tr:last-child td { border-bottom: 0; }
+    .empty { color: var(--muted); font-family: var(--sans); }
+
+    dl.kv { display: grid; grid-template-columns: auto 1fr; gap: 8px 24px; margin: 16px 0 0; font-size: 13px; }
+    dl.kv dt { color: var(--muted); }
+    dl.kv dd { margin: 0; text-align: right; font-family: var(--mono); overflow-wrap: anywhere; }
+    .stream-title { font-weight: 600; letter-spacing: -0.01em; }
+
+    /* Watch section: player + auto-mute switches */
+    .watch { padding: 32px 0; border-bottom: 1px solid var(--line); }
+    .watch-head { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; margin-bottom: 16px; }
+    .player { position: relative; aspect-ratio: 16 / 9; background: #000; border: 1px solid var(--line); }
+    #ytPlayer, .player iframe, .player .placeholder { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+    .player .placeholder { display: flex; align-items: center; justify-content: center; padding: 24px; text-align: center; color: #8A8A8A; font: 500 12px/1.5 var(--mono); }
+    .player { overflow: hidden; }
+    .player.auto-muted { border-color: var(--alert); outline: 1px solid var(--alert); }
+    /* Full blur: the iframe is cross-origin, so the filter is applied to the iframe element itself. */
+    .player iframe { transition: filter var(--t); }
+    .player.blurred iframe { filter: blur(64px) saturate(0.5) brightness(0.8); }
+    .blur-veil { position: absolute; inset: 0; z-index: 3; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 24px; text-align: center; pointer-events: none; }
+    .veil-text { color: #fff; font: 500 12px/1.5 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; }
+    .veil-btn { pointer-events: auto; color: #fff; border-color: rgba(255, 255, 255, 0.5); }
+    .veil-btn:hover { background: rgba(255, 255, 255, 0.12); border-color: #fff; }
+    .mute-flag { position: absolute; top: 12px; left: 12px; z-index: 2; padding: 4px 8px; background: var(--alert); color: #fff; font: 500 11px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; pointer-events: none; }
+    .switches { margin-top: 8px; }
+    .switch-row { display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 14px 0; border-bottom: 1px solid var(--line); cursor: pointer; }
+    .switch-row:last-child { border-bottom: 0; }
+    .switch-row .t { font-weight: 500; }
+    .switch-row .h { display: block; margin-top: 2px; font-size: 12px; color: var(--muted); }
+    .switch { position: relative; flex: none; width: 36px; height: 20px; }
+    .switch input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+    .switch .track { position: absolute; inset: 0; border: 1px solid var(--muted); background: transparent; transition: background-color var(--t), border-color var(--t); }
+    .switch .knob { position: absolute; top: 3px; left: 3px; width: 12px; height: 12px; background: var(--muted); transition: transform var(--t), background-color var(--t); }
+    .switch input:checked ~ .track { background: var(--ink); border-color: var(--ink); }
+    .switch input:checked ~ .knob { transform: translateX(16px); background: var(--bg); }
+    .switch input:focus-visible ~ .track { outline: 2px solid var(--info); outline-offset: 2px; }
+    .audio-state { font: 500 11px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+    .audio-state.muted { color: var(--alert); }
+
+    details { border-bottom: 1px solid var(--line); }
+    summary { list-style: none; cursor: pointer; padding: 20px 0; display: flex; justify-content: space-between; align-items: center; }
+    summary::-webkit-details-marker { display: none; }
+    summary::after { content: "+"; font-family: var(--mono); color: var(--muted); }
+    details[open] summary::after { content: "−"; }
+    summary:hover .label { color: var(--ink); }
+    .dbody { padding-bottom: 32px; }
+    .embed { aspect-ratio: 16 / 9; border: 1px solid var(--line); background: #000; }
+    .embed iframe { width: 100%; height: 100%; border: 0; display: block; }
+    .debug-img { display: block; width: 100%; border: 1px solid var(--line); background: #000; min-height: 40px; }
+    .legend { margin: 8px 0 24px; font-size: 12px; color: var(--muted); }
+    .k-g { color: var(--ok); } .k-y { color: #B7791F; } .k-r { color: var(--alert); }
+    .dtable td { font-size: 12px; padding: 6px 12px 6px 0; }
+    .dtable tr.match td { color: var(--ok); }
+    .dtable tr.rej td { color: var(--faint); }
+    .sim-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .note { margin-top: 8px; font-size: 12px; color: var(--muted); }
+    .scroll { overflow-x: auto; }
+
+    footer { padding-top: 24px; font-size: 12px; color: var(--muted); display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+
+    /* Toast: instant, no entrance animation */
+    .toast {
+      position: fixed; top: 16px; left: 50%; transform: translateX(-50%); z-index: 50;
+      width: min(calc(100% - 32px), 560px); padding: 14px 16px;
+      background: var(--ink); color: var(--bg); font: 500 14px/1.4 var(--mono); text-align: center;
+    }
+
+    @media (prefers-reduced-motion: reduce) { .dot.live { animation: none; } * { transition: none !important; } }
+  </style>
+</head>
+<body>
+  <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+
+  <main class="wrap">
+    <header>
+      <h1 data-i18n="title"></h1>
+      <div class="meta">
+        <span class="status label"><span id="streamDot" class="dot"></span><span id="streamText">—</span></span>
+        <span id="connText" class="label">—</span>
+        <span class="seg" role="group" aria-label="Language">
+          <button type="button" data-lang="sr">SR</button>
+          <button type="button" data-lang="en">EN</button>
+        </span>
+      </div>
+    </header>
+
+    <div class="controls">
+      <button id="soundBtn" type="button"></button>
+      <button id="testBtn" type="button" data-i18n="test"></button>
+    </div>
+
+    <section id="hero" class="hero" aria-live="polite"></section>
+
+    <section class="watch" aria-labelledby="watchTitle">
+      <div class="watch-head">
+        <span id="watchTitle" class="label" data-i18n="watch"></span>
+        <span id="audioState" class="audio-state"></span>
+      </div>
+      <div class="player">
+        <div id="ytPlayer"></div>
+        <div id="playerPlaceholder" class="placeholder"></div>
+        <div id="muteFlag" class="mute-flag hidden" data-i18n="autoMuted"></div>
+        <div id="blurVeil" class="blur-veil hidden">
+          <span id="blurText" class="veil-text"></span>
+          <button id="peekBtn" type="button" class="veil-btn" data-i18n="peek"></button>
+        </div>
+      </div>
+      <div class="switches">
+        <label class="switch-row">
+          <span><span class="t" data-i18n="optMuteV"></span><span class="h" data-i18n="optMuteVHint"></span></span>
+          <span class="switch"><input type="checkbox" id="muteV" role="switch"><span class="track"></span><span class="knob"></span></span>
+        </label>
+        <label class="switch-row">
+          <span><span class="t" data-i18n="optBlurV"></span><span class="h" data-i18n="optBlurVHint"></span></span>
+          <span class="switch"><input type="checkbox" id="blurV" role="switch"><span class="track"></span><span class="knob"></span></span>
+        </label>
+        <label class="switch-row">
+          <span><span class="t" data-i18n="optMuteP"></span><span class="h" data-i18n="optMutePHint"></span></span>
+          <span class="switch"><input type="checkbox" id="muteP" role="switch"><span class="track"></span><span class="knob"></span></span>
+        </label>
+      </div>
+    </section>
+
+    <div class="stats">
+      <div class="stat"><div class="label" data-i18n="statToday"></div><div id="statToday" class="v num">0:00</div></div>
+      <div class="stat"><div class="label" data-i18n="statLast"></div><div id="statLast" class="v">—</div><div id="statLastAbs" class="s num"></div></div>
+      <div class="stat"><div class="label" data-i18n="statCount"></div><div id="statCount" class="v num">0</div></div>
+      <div class="stat"><div class="label" data-i18n="statAll"></div><div id="statAll" class="v num">0:00</div></div>
+    </div>
+
+    <section class="block">
+      <span class="label" data-i18n="recent"></span>
+      <div class="scroll">
+        <table>
+          <thead><tr><th data-i18n="colDate"></th><th data-i18n="colStart"></th><th data-i18n="colEnd"></th><th data-i18n="colDur"></th></tr></thead>
+          <tbody id="speechRows"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="block">
+      <span class="label" data-i18n="stream"></span>
+      <div id="streamTitle" class="stream-title">—</div>
+      <div id="streamDetail" class="muted mono" style="font-size:12px;margin-top:4px">—</div>
+      <dl class="kv">
+        <dt data-i18n="kvOcr"></dt><dd id="ocrStatus">—</dd>
+        <dt data-i18n="kvFrame"></dt><dd id="lastFrame">—</dd>
+        <dt data-i18n="kvCheck"></dt><dd id="lastCheck">—</dd>
+        <dt data-i18n="kvRaw"></dt><dd id="rawVerdict">—</dd>
+        <dt data-i18n="kvLink"></dt><dd><a id="streamLink" target="_blank" rel="noopener" href="https://www.youtube.com/@ParlamentSrbija/live">YouTube ↗</a></dd>
+      </dl>
+    </section>
+
+    <details id="debug">
+      <summary><span class="label" data-i18n="debug"></span></summary>
+      <div class="dbody">
+        <img id="debugImg" class="debug-img" alt="">
+        <p class="legend" data-i18n-html="legend"></p>
+
+        <span class="label" data-i18n="dLines"></span>
+        <div class="scroll" style="margin:8px 0 24px">
+          <table class="dtable">
+            <thead><tr><th data-i18n="dText"></th><th>H%</th><th data-i18n="dScore"></th><th data-i18n="dMatch"></th></tr></thead>
+            <tbody id="debugLines"></tbody>
+          </table>
+        </div>
+
+        <span class="label" data-i18n="dDets"></span>
+        <div class="scroll" style="margin:8px 0 16px">
+          <table class="dtable">
+            <thead><tr><th>#</th><th data-i18n="dText"></th><th data-i18n="dConf"></th><th>H%</th><th data-i18n="dSize"></th></tr></thead>
+            <tbody id="debugDets"></tbody>
+          </table>
+        </div>
+        <p id="debugMeta" class="note mono"></p>
+
+        <div id="simBox" class="hidden" style="margin-top:24px;padding-top:24px;border-top:1px solid var(--line)">
+          <span class="label" data-i18n="simTitle"></span>
+          <div class="sim-row">
+            <button type="button" class="sim" data-sim="VUCIC_SPEAKING" data-i18n="simV"></button>
+            <button type="button" class="sim" data-sim="PARTY_MEMBER_SPEAKING" data-i18n="simP"></button>
+            <button type="button" class="sim" data-sim="OTHER_OR_NONE" data-i18n="simN"></button>
+            <button type="button" class="sim" data-sim="RELEASE" data-i18n="simR"></button>
+          </div>
+          <p class="note" data-i18n="simNote"></p>
+        </div>
+      </div>
+    </details>
+
+    <footer>
+      <span data-i18n="footer"></span>
+      <a href="/api/state" class="mono">/api/state</a>
+    </footer>
+  </main>
+
+<script>
+(() => {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+
+  // ------------------------------------------------------------------ i18n
+  const I18N = {
+    sr: {
+      locale: 'sr-Latn-RS',
+      title: 'Da li Vučić govori',
+      test: 'Testiraj proslavu',
+      soundOff: 'Uključi zvuk proslave', soundOn: 'Zvuk uključen', soundArm: 'Klikni da aktiviraš zvuk',
+      LIVE: 'Uživo', OFFLINE: 'Van mreže', CONNECTING: 'Povezivanje',
+      connLive: 'Ažuriranja uživo', connRetry: 'Ponovno povezivanje…', connInit: 'Povezivanje…',
+      status: 'Status',
+      heroV: 'Aleksandar Vučić upravo govori',
+      current: 'Trenutni govor',
+      heroP: 'Govori poslanik SNS koalicije',
+      heroPsub: 'Reč ima poslanik iz poslaničke grupe „Aleksandar Vučić – Srbija pobeđuje”.',
+      heroN: 'Vučić ne govori',
+      heroNsub: 'Reč ima neko drugi ili natpis nije na ekranu.',
+      heroC: 'Povezivanje sa prenosom…',
+      heroOff: 'Prenos uživo nije aktivan',
+      heroOffSub: 'Parlament Srbija trenutno ne emituje. Provera na svakih 30 sekundi.',
+      nextIn: 'Sledeće zasedanje za', nextAt: 'Početak', nextUnknown: 'Termin sledećeg zasedanja još nije objavljen.',
+      nextSrcYt: 'zakazano na YouTube kanalu', nextSrcManual: 'najavljeno',
+      defTerm: 'logoreja',
+      defMeta: 'imenica, ž. r. · od grč. lógos (reč) + rhéō (teći)',
+      defText: 'Preterana, teško zaustavljiva potreba za govorenjem; obilan i brz govor koji se lako udaljava od teme i ne ostavlja prostora sagovorniku.',
+      BREAK: 'Pauza',
+      heroBreak: 'Pauza u toku',
+      heroBreakSub: 'Sednica je trenutno u pauzi. Rad se nastavlja posle pauze.',
+      breakFor: 'Pauza traje',
+      simulated: 'simulirano',
+      watchLive: 'Gledaj uživo',
+      statToday: 'Ukupno danas', statLast: 'Poslednji put', statCount: 'Govora danas', statAll: 'Ukupno',
+      never: 'nikad', speakingNow: 'govori sada',
+      recent: 'Poslednji govori', colDate: 'Datum', colStart: 'Početak', colEnd: 'Kraj', colDur: 'Trajanje',
+      empty: 'Još nema zabeleženih govora.',
+      stream: 'Prenos', kvOcr: 'OCR', kvFrame: 'Poslednji kadar', kvCheck: 'Poslednja provera', kvRaw: 'Ocena kadra', kvLink: 'Kanal',
+      ocrReady: 'spreman', ocrLoading: 'učitavanje…', ocrError: 'greška',
+      noBroadcast: 'Nema prenosa uživo',
+      watch: 'Gledaj Skupštinu', embedNone: 'Prenos trenutno nije dostupan. Plejer će se pojaviti čim sednica počne.',
+      autoMuted: 'Automatski utišano',
+      optMuteV: 'Utišaj kad govori Vučić', optMuteVHint: 'Zvuk se vraća čim prestane da govori.',
+      optBlurV: 'Zamuti sliku kad govori Vučić', optBlurVHint: 'Slika se potpuno zamuti dok govori.',
+      optMuteP: 'Isto i kad govori poslanik njegove partije', optMutePHint: 'Utišavanje i zamućenje važe i za poslaničku grupu „Aleksandar Vučić – Srbija pobeđuje”.',
+      blurredV: 'Zamućeno · govori Vučić', blurredP: 'Zamućeno · govori poslanik SNS koalicije', peek: 'Prikaži ipak',
+      aOn: 'Zvuk uključen', aAuto: 'Utišano automatski', aUser: 'Utišano ručno', aOverride: 'Ručno uključen zvuk',
+      debug: 'OCR dijagnostika',
+      legend: '<span class="k-g">Zeleno</span> — red prepoznat kao „Александар Вучић”; <span class="k-y">žuto</span> — tekst odgovarajuće veličine; <span class="k-r">crveno</span> — odbačeno filterom visine. Oznake: <code>#indeks visina%</code>.',
+      dLines: 'Spojeni redovi (filtrirano po veličini)', dDets: 'Sirove detekcije',
+      dText: 'Tekst', dScore: 'Skor', dMatch: 'Pogodak', dConf: 'Pouzd.', dSize: 'Veličina',
+      sizeOk: 'ok', sizeRej: 'odbačeno', noData: 'Još nema OCR podataka.',
+      simTitle: 'Simulacija stanja (testira ceo SSE tok)',
+      simV: 'Vučić govori', simP: 'Poslanik koalicije', simN: 'Neko drugi', simR: 'Vrati na OCR',
+      simNote: 'Simulirani govori se ne čuvaju u statistici. Simulirano stanje traje neko vreme, zatim OCR ponovo preuzima.',
+      toast: (d) => `Prestao je da govori. Trajanje: ${d}`,
+      footer: 'Lokalni monitor · podaci u SQLite bazi',
+      docTitle: 'Da li Vučić govori', docTitleV: (t) => `● ${t} · Vučić govori`,
+    },
+    en: {
+      locale: 'en-GB',
+      title: 'Is Vučić Speaking',
+      test: 'Test celebration',
+      soundOff: 'Enable celebration sound', soundOn: 'Sound on', soundArm: 'Click to re-arm sound',
+      LIVE: 'Live', OFFLINE: 'Offline', CONNECTING: 'Connecting',
+      connLive: 'Live updates', connRetry: 'Reconnecting…', connInit: 'Connecting…',
+      status: 'Status',
+      heroV: 'Aleksandar Vučić is speaking now',
+      current: 'Current speech',
+      heroP: 'SNS coalition MP speaking',
+      heroPsub: 'An MP from the “Aleksandar Vučić – Srbija pobeđuje” parliamentary group has the floor.',
+      heroN: 'Vučić is not speaking',
+      heroNsub: 'Someone else has the floor, or no caption is on screen.',
+      heroC: 'Connecting to the stream…',
+      heroOff: 'The livestream is not active',
+      heroOffSub: 'Parlament Srbija is not broadcasting right now. Checking every 30 seconds.',
+      nextIn: 'Next session in', nextAt: 'Starts', nextUnknown: 'The next session has not been announced yet.',
+      nextSrcYt: 'scheduled on the YouTube channel', nextSrcManual: 'announced',
+      defTerm: 'logorrhea',
+      defMeta: 'noun · from Greek lógos (word) + rhoia (flow)',
+      defText: 'An excessive, hard-to-stop urge to talk; abundant, rapid speech that easily drifts off topic and leaves no room for anyone else.',
+      BREAK: 'Break',
+      heroBreak: 'Break in progress',
+      heroBreakSub: 'The session is on a break. Proceedings resume after the break.',
+      breakFor: 'Break so far',
+      simulated: 'simulated',
+      watchLive: 'Watch live',
+      statToday: 'Today', statLast: 'Last spoke', statCount: 'Speeches today', statAll: 'All-time',
+      never: 'never', speakingNow: 'speaking now',
+      recent: 'Recent speeches', colDate: 'Date', colStart: 'Start', colEnd: 'End', colDur: 'Duration',
+      empty: 'No speeches recorded yet.',
+      stream: 'Stream', kvOcr: 'OCR', kvFrame: 'Last frame', kvCheck: 'Last live check', kvRaw: 'Frame verdict', kvLink: 'Channel',
+      ocrReady: 'ready', ocrLoading: 'loading…', ocrError: 'error',
+      noBroadcast: 'No live broadcast',
+      watch: 'Watch the Assembly', embedNone: 'The stream is not available right now. The player will appear as soon as the session starts.',
+      autoMuted: 'Auto-muted',
+      optMuteV: 'Mute when Vučić speaks', optMuteVHint: 'Sound comes back as soon as he stops.',
+      optBlurV: 'Blur the picture when Vučić speaks', optBlurVHint: 'The picture is fully blurred while he speaks.',
+      optMuteP: 'Same when an MP from his party speaks', optMutePHint: 'Muting and blurring also apply to the “Aleksandar Vučić – Srbija pobeđuje” group.',
+      blurredV: 'Blurred · Vučić is speaking', blurredP: 'Blurred · SNS coalition MP speaking', peek: 'Show anyway',
+      aOn: 'Sound on', aAuto: 'Auto-muted', aUser: 'Muted by you', aOverride: 'Unmuted by you',
+      debug: 'OCR live debug',
+      legend: '<span class="k-g">Green</span> — line matched “Александар Вучић”; <span class="k-y">yellow</span> — text within the size window; <span class="k-r">red</span> — rejected by the height filter. Labels: <code>#index height%</code>.',
+      dLines: 'Merged lines (size-filtered)', dDets: 'Raw detections',
+      dText: 'Text', dScore: 'Score', dMatch: 'Match', dConf: 'Conf', dSize: 'Size',
+      sizeOk: 'ok', sizeRej: 'rejected', noData: 'No OCR data yet.',
+      simTitle: 'Simulate backend state (tests the full SSE pipeline)',
+      simV: 'Vučić speaking', simP: 'Party member', simN: 'Other / none', simR: 'Release to OCR',
+      simNote: 'Simulated speeches are not saved to the statistics. The simulated state is held for a while, then OCR takes over again.',
+      toast: (d) => `He stopped speaking. Duration: ${d}`,
+      footer: 'Local monitor · data stored in SQLite',
+      docTitle: 'Is Vučić Speaking', docTitleV: (t) => `● ${t} · Vučić speaking`,
+    },
+  };
+
+  function initialLang() {
+    try { const s = localStorage.getItem('lang'); if (s && I18N[s]) return s; } catch (_) {}
+    const nav = (navigator.languages || [navigator.language || 'en']).join(',').toLowerCase();
+    return /(^|,)(sr|hr|bs|cnr|me)/.test(nav) ? 'sr' : 'en';
+  }
+  let lang = initialLang();
+  const t = (k) => I18N[lang][k];
+  let rtf = new Intl.RelativeTimeFormat(I18N[lang].locale, { numeric: 'auto' });
+
+  function applyLang() {
+    document.documentElement.lang = lang === 'sr' ? 'sr-Latn' : 'en';
+    rtf = new Intl.RelativeTimeFormat(I18N[lang].locale, { numeric: 'auto' });
+    document.querySelectorAll('[data-i18n]').forEach((el) => { el.textContent = t(el.dataset.i18n); });
+    document.querySelectorAll('[data-i18n-html]').forEach((el) => { el.innerHTML = t(el.dataset.i18nHtml); });
+    document.querySelectorAll('[data-lang]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.lang === lang)));
+    $('debugImg').alt = t('debug');
+    renderConn(); renderSoundBtn(); renderHero(true); renderStatic(); tick();
+  }
+  document.querySelectorAll('[data-lang]').forEach((b) => b.addEventListener('click', () => {
+    lang = b.dataset.lang;
+    try { localStorage.setItem('lang', lang); } catch (_) {}
+    applyLang();
+  }));
+
+  // ------------------------------------------------------------------ state + helpers
+  let state = null;
+  let clockOffset = 0;
+  let conn = 'init';
+  const seenEndings = new Set();
+  const nowServer = () => Date.now() / 1000 + clockOffset;
+  const pad = (n) => String(n).padStart(2, '0');
+  function fmtDur(sec) {
+    sec = Math.max(0, Math.floor(sec || 0));
+    const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+    return h ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+  }
+  const fmtClock = (sec) => { sec = Math.max(0, Math.floor(sec)); return `${pad(Math.floor(sec / 3600))}:${pad(Math.floor(sec % 3600 / 60))}:${pad(sec % 60)}`; };
+  const fmtMMSS = (sec) => { sec = Math.max(0, Math.round(sec || 0)); return `${pad(Math.floor(sec / 60))}:${pad(sec % 60)}`; };
+  function relTime(isoStr) {
+    if (!isoStr) return t('never');
+    const diff = Math.round(Date.parse(isoStr) / 1000 - nowServer()); // negative = past
+    const a = Math.abs(diff);
+    if (a < 5) return rtf.format(0, 'second');
+    if (a < 60) return rtf.format(-a, 'second');
+    for (const [u, s] of [['year', 31536000], ['month', 2592000], ['day', 86400], ['hour', 3600], ['minute', 60]]) {
+      if (a >= s) return rtf.format(-Math.floor(a / s), u);
+    }
+    return rtf.format(-a, 'second');
+  }
+  const loc = () => I18N[lang].locale;
+  const fmtTime = (s) => s ? new Date(s).toLocaleTimeString(loc(), { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—';
+  const fmtDate = (s) => s ? new Date(s).toLocaleDateString(loc(), { day: '2-digit', month: 'short' }) : '—';
+  const fmtFull = (s) => s ? new Date(s).toLocaleString(loc(), { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+  // ------------------------------------------------------------------ audio (Web Audio synth)
+  const audio = {
+    ctx: null, enabled: false,
+    ensure() {
+      if (!this.ctx) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return null;
+        this.ctx = new AC();
+        const comp = this.ctx.createDynamicsCompressor();
+        this.master = this.ctx.createGain();
+        this.master.gain.value = 0.55;
+        this.master.connect(comp).connect(this.ctx.destination);
+      }
+      if (this.ctx.state === 'suspended') this.ctx.resume();
+      return this.ctx;
+    },
+    tone(freq, start, dur, type = 'triangle', vol = 0.3) {
+      const ctx = this.ctx, o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = type; o.frequency.setValueAtTime(freq, start);
+      g.gain.setValueAtTime(0.0001, start);
+      g.gain.exponentialRampToValueAtTime(vol, start + 0.015);
+      g.gain.setValueAtTime(vol, start + Math.max(0.02, dur * 0.6));
+      g.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+      o.connect(g).connect(this.master);
+      o.start(start); o.stop(start + dur + 0.05);
+    },
+    noise(start, dur = 0.12, vol = 0.25) {
+      const ctx = this.ctx, len = Math.floor(ctx.sampleRate * dur);
+      const buf = ctx.createBuffer(1, len, ctx.sampleRate), data = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / len);
+      const src = ctx.createBufferSource(), hp = ctx.createBiquadFilter(), g = ctx.createGain();
+      hp.type = 'highpass'; hp.frequency.value = 1800; g.gain.value = vol;
+      src.buffer = buf; src.connect(hp).connect(g).connect(this.master);
+      src.start(start);
+    },
+    chime() {
+      if (!this.ensure()) return;
+      const s = this.ctx.currentTime + 0.03;
+      this.tone(1046.5, s, 0.18, 'sine', 0.25);
+      this.tone(1568, s + 0.09, 0.3, 'sine', 0.2);
+    },
+    fanfare() {
+      if (!this.enabled || !this.ensure()) return;
+      const t0 = this.ctx.currentTime + 0.05, b = 0.14;
+      const N = { G4: 392, C5: 523.25, E5: 659.25, G5: 783.99, A5: 880, B5: 987.77, C6: 1046.5, C4: 261.63, G3: 196 };
+      const melody = [
+        ['G4', 0, 1], ['G4', 1, 1], ['G4', 2, 1], ['C5', 3, 3],
+        ['E5', 6.5, 1], ['G5', 7.5, 1], ['E5', 8.5, 1], ['G5', 9.5, 1], ['A5', 10.5, 1], ['B5', 11.5, 1], ['C6', 12.5, 6],
+      ];
+      for (const [n, at, len] of melody) {
+        this.tone(N[n], t0 + at * b, len * b + 0.06, 'square', 0.12);
+        this.tone(N[n] * 2, t0 + at * b, len * b, 'triangle', 0.05);
+      }
+      const end = t0 + 12.5 * b;
+      for (const f of [N.E5, N.G5, N.C5]) this.tone(f, end, 6 * b + 0.3, 'triangle', 0.11);
+      for (const [f, at] of [[N.C4, 3], [N.G3, 6.5], [N.C4, 9.5], [N.C4, 12.5]]) this.tone(f, t0 + at * b, 2.5 * b, 'sawtooth', 0.08);
+      for (const at of [0, 1, 2, 3, 6.5, 9.5, 12.5, 13.5, 14.5]) this.noise(t0 + at * b, 0.1, 0.18);
+      [2093, 2637, 3136, 4186].forEach((f, i) => this.tone(f, end + 0.25 + i * 0.07, 0.25, 'sine', 0.05));
+    },
+  };
+
+  const soundBtn = $('soundBtn');
+  function renderSoundBtn() {
+    soundBtn.classList.remove('on', 'arm');
+    if (!audio.enabled) { soundBtn.textContent = '○ ' + t('soundOff'); }
+    else if (!audio.ctx || audio.ctx.state !== 'running') { soundBtn.textContent = '◐ ' + t('soundArm'); soundBtn.classList.add('arm'); }
+    else { soundBtn.textContent = '● ' + t('soundOn'); soundBtn.classList.add('on'); }
+    soundBtn.setAttribute('aria-pressed', String(audio.enabled));
+  }
+  soundBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (audio.enabled && audio.ctx && audio.ctx.state === 'running') audio.enabled = false;
+    else { audio.enabled = true; audio.ensure(); audio.chime(); }
+    try { localStorage.setItem('celebrationSound', audio.enabled ? '1' : '0'); } catch (_) {}
+    setTimeout(renderSoundBtn, 60);
+  });
+  try { audio.enabled = localStorage.getItem('celebrationSound') === '1'; } catch (_) {}
+  const rearm = () => { if (audio.enabled) { audio.ensure(); setTimeout(renderSoundBtn, 60); } };
+  document.addEventListener('pointerdown', rearm, { once: true });
+  document.addEventListener('keydown', rearm, { once: true });
+
+  // ------------------------------------------------------------------ celebration
+  let toastTimer = null;
+  function celebrate(durationSec) {
+    const toast = $('toast');
+    toast.textContent = t('toast')(fmtMMSS(durationSec));
+    toast.classList.remove('hidden');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.add('hidden'), 9000);
+    audio.fanfare();
+    if (typeof confetti !== 'function') return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const colors = [css('--ink'), css('--alert'), css('--info'), css('--muted')];
+    const base = { colors, shapes: ['square'], scalar: 0.9, ticks: 220 };
+    confetti({ ...base, particleCount: 140, spread: 90, startVelocity: 50, origin: { y: 0.6 } });
+    setTimeout(() => {
+      confetti({ ...base, particleCount: 80, angle: 60, spread: 65, origin: { x: 0, y: 0.7 } });
+      confetti({ ...base, particleCount: 80, angle: 120, spread: 65, origin: { x: 1, y: 0.7 } });
+    }, 250);
+    setTimeout(() => confetti({ ...base, particleCount: 100, spread: 160, startVelocity: 32, origin: { y: 0.3 } }), 650);
+  }
+  $('testBtn').addEventListener('click', () => { if (audio.enabled) audio.ensure(); celebrate(60 + Math.random() * 1500); });
+
+  // ------------------------------------------------------------------ rendering
+  function renderConn() {
+    $('connText').textContent = t(conn === 'live' ? 'connLive' : conn === 'retry' ? 'connRetry' : 'connInit');
+  }
+
+  let heroKey = null;
+  function renderHero(force) {
+    const s = state, hero = $('hero');
+    const key = s ? `${s.speaker_state}|${s.stream_status}|${s.simulation_active}|${s.current_session_started_at}|${s.stream_url}|${s.on_break}|${s.next_session_at}` : 'none';
+    if (!force && key === heroKey) return;
+    heroKey = key;
+    hero.classList.toggle('alert', !!s && s.speaker_state === 'VUCIC_SPEAKING');
+    if (!s) { hero.innerHTML = `<div class="label">${t('status')}</div><h2>${t('connInit')}</h2>`; return; }
+    const sim = s.simulation_active ? ` · <span class="tag mono">${t('simulated')}</span>` : '';
+    if (s.speaker_state === 'VUCIC_SPEAKING') {
+      const link = s.stream_url ? ` · <a href="${esc(s.stream_url)}" target="_blank" rel="noopener">${t('watchLive')} ↗</a>` : '';
+      hero.innerHTML = `
+        <div class="label" style="color:var(--alert)">● ${t('LIVE')}</div>
+        <h2>${t('heroV')}</h2>
+        <div class="timer"><span class="label">${t('current')}</span><span id="liveTimer" class="num">0:00</span></div>
+        <p class="sub mono" style="font-size:12px">${esc(s.stream_title || 'Parlament Srbija')}${link}${sim}</p>`;
+    } else if (s.speaker_state === 'PARTY_MEMBER_SPEAKING') {
+      hero.innerHTML = `
+        <div class="label" style="color:var(--info)">${t('status')}</div>
+        <h2>${t('heroP')}</h2>
+        <p class="sub">${t('heroPsub')}${sim}</p>`;
+    } else if (s.stream_status === 'OFFLINE') {
+      const next = s.next_session_at
+        ? `<div class="timer"><span class="label">${t('nextIn')}</span><span id="countdown" class="num">—</span>
+             <span class="sub mono" style="display:block;margin-top:12px;font-size:12px">${t('nextAt')}: ${esc(fmtFull(s.next_session_at))} · ${t(s.next_session_source === 'youtube' ? 'nextSrcYt' : 'nextSrcManual')}</span></div>`
+        : `<p class="sub">${t('nextUnknown')}</p>`;
+      hero.innerHTML = `
+        <div class="label">${t('status')} · ${t('OFFLINE')}</div>
+        <h2>${t('heroOff')}</h2>
+        <p class="sub">${t('heroOffSub')}</p>
+        ${next}
+        <figure class="define">
+          <div class="define-term">${t('defTerm')}</div>
+          <div class="define-meta mono">${t('defMeta')}</div>
+          <p class="define-text">${t('defText')}</p>
+        </figure>`;
+    } else if (s.on_break) {
+      hero.innerHTML = `
+        <div class="label">${t('status')} · ${t('BREAK')}</div>
+        <h2>${t('heroBreak')}</h2>
+        <p class="sub">${t('heroBreakSub')}</p>
+        <div class="timer"><span class="label">${t('breakFor')}</span><span id="breakTimer" class="num">0:00</span></div>`;
+    } else {
+      hero.innerHTML = `
+        <div class="label">${t('status')}</div>
+        <h2>${t('heroN')}</h2>
+        <p class="sub">${s.stream_status === 'CONNECTING' ? t('heroC') : t('heroNsub')}${sim}</p>`;
+    }
+  }
+
+  function renderStatic() {
+    const s = state; if (!s) return;
+    const st = s.stream_status;
+    $('streamText').textContent = s.on_break ? t('BREAK') : (t(st) || st);
+    $('streamDot').className = 'dot' + (st === 'LIVE' ? ' live' : st === 'CONNECTING' ? ' wait' : '');
+    $('streamTitle').textContent = s.stream_title || (st === 'OFFLINE' ? t('noBroadcast') : '—');
+    $('streamDetail').textContent = s.status_detail || '';
+    $('streamLink').href = (s.stream_url && st !== 'OFFLINE') ? s.stream_url : 'https://www.youtube.com/@ParlamentSrbija/live';
+
+    const ocr = $('ocrStatus');
+    ocr.textContent = `${s.ocr_backend} · ${s.ocr_error ? t('ocrError') : s.ocr_ready ? t('ocrReady') : t('ocrLoading')}`;
+    ocr.title = s.ocr_error || '';
+    ocr.style.color = s.ocr_error ? 'var(--alert)' : '';
+    $('rawVerdict').textContent = s.raw_classification || '—';
+    $('statCount').textContent = s.speech_count_today;
+    $('statLastAbs').textContent = s.speaker_state === 'VUCIC_SPEAKING' ? '' : fmtFull(s.last_spoke_timestamp);
+
+    $('speechRows').innerHTML = (s.recent_speeches || []).map((r) =>
+      `<tr><td>${fmtDate(r.start)}</td><td>${fmtTime(r.start)}</td><td>${fmtTime(r.end)}</td><td>${fmtDur(r.duration_sec)}</td></tr>`).join('')
+      || `<tr><td colspan="4" class="empty">${t('empty')}</td></tr>`;
+
+    renderEmbed();
+    renderDebug();
+  }
+
+  // ------------------------------------------------------------------ embedded player + auto-mute
+  // YouTube IFrame Player API: the page mutes/unmutes the embedded broadcast itself.
+  // muteV / blurV: act when Vučić speaks. muteP: apply the same actions to his party's MPs.
+  const prefs = { muteV: true, blurV: false, muteP: false };
+  try { Object.assign(prefs, JSON.parse(localStorage.getItem('autoMute') || '{}')); } catch (_) {}
+  for (const id of ['muteV', 'blurV', 'muteP']) {
+    $(id).checked = !!prefs[id];
+    $(id).addEventListener('change', (e) => {
+      prefs[id] = e.target.checked;
+      try { localStorage.setItem('autoMute', JSON.stringify(prefs)); } catch (_) {}
+      override = null; peekOverride = null; // a settings change re-evaluates from scratch
+      syncMute();
+    });
+  }
+
+  // Does the current speaker trigger the given action ('muteV' or 'blurV')?
+  function triggers(action) {
+    const st = state && state.speaker_state;
+    return !!prefs[action] && (st === 'VUCIC_SPEAKING' || (prefs.muteP && st === 'PARTY_MEMBER_SPEAKING'));
+  }
+
+  let peekOverride = null; // speaker_state during which the viewer chose "show anyway"
+  $('peekBtn').addEventListener('click', () => { peekOverride = state && state.speaker_state; renderBlur(); });
+
+  function renderBlur() {
+    const st = state && state.speaker_state;
+    if (peekOverride !== null && peekOverride !== st) peekOverride = null; // speaker changed
+    const on = triggers('blurV') && peekOverride === null && !!playerVid;
+    const playerEl = $('ytPlayer').closest('.player');
+    playerEl.classList.toggle('blurred', on);
+    $('blurVeil').classList.toggle('hidden', !on);
+    $('blurText').textContent = st === 'VUCIC_SPEAKING' ? t('blurredV') : t('blurredP');
+    $('peekBtn').textContent = t('peek');
+  }
+
+  let player = null, playerReady = false, playerVid = null, apiLoading = false;
+  let autoMuted = false;     // we muted the player
+  let mutedAt = 0;
+  let override = null;       // speaker_state during which the viewer unmuted manually
+
+  function loadYouTubeApi() {
+    if (window.YT && window.YT.Player) return Promise.resolve();
+    if (apiLoading) return new Promise((r) => document.addEventListener('yt-ready', r, { once: true }));
+    apiLoading = true;
+    return new Promise((resolve) => {
+      window.onYouTubeIframeAPIReady = () => { document.dispatchEvent(new Event('yt-ready')); resolve(); };
+      const s = document.createElement('script');
+      s.src = 'https://www.youtube.com/iframe_api';
+      document.head.appendChild(s);
+    });
+  }
+
+  async function renderPlayer() {
+    const s = state;
+    const vid = s && s.video_id && s.stream_status !== 'OFFLINE' ? s.video_id : null;
+    const ph = $('playerPlaceholder');
+    ph.textContent = t('embedNone');
+    ph.classList.toggle('hidden', !!vid);
+    $('ytPlayer').style.visibility = vid ? 'visible' : 'hidden';
+    if (!vid || vid === playerVid) return;
+    playerVid = vid;
+    await loadYouTubeApi();
+    if (player && playerReady) { player.cueVideoById(vid); return; }
+    if (player) return;
+    player = new YT.Player('ytPlayer', {
+      videoId: vid,
+      playerVars: { playsinline: 1, rel: 0, autoplay: 0 },
+      events: {
+        onReady: () => { playerReady = true; syncMute(); },
+        onStateChange: () => syncMute(),
+      },
+    });
+  }
+
+  const wantMute = () => triggers('muteV');
+
+  function syncMute() {
+    renderBlur();
+    if (!player || !playerReady || typeof player.isMuted !== 'function') { renderAudioState(); return; }
+    const st = state && state.speaker_state;
+    const muted = player.isMuted();
+    if (override !== null && override !== st) override = null; // speaker changed: auto-mute resumes
+    if (wantMute()) {
+      // isMuted() can lag right after mute(); only treat "unmuted" as a manual override after a grace period.
+      if (autoMuted && !muted && Date.now() - mutedAt > 1500) { override = st; autoMuted = false; }
+      else if (!muted && !autoMuted && override === null) { player.mute(); autoMuted = true; mutedAt = Date.now(); }
+    } else if (autoMuted) {
+      if (muted) player.unMute();
+      autoMuted = false;
+    }
+    renderAudioState();
+  }
+
+  function renderAudioState() {
+    const el = $('audioState');
+    const flag = $('muteFlag');
+    if (!player || !playerReady || typeof player.isMuted !== 'function') { el.textContent = ''; flag.classList.add('hidden'); return; }
+    const muted = player.isMuted();
+    el.classList.toggle('muted', muted);
+    el.textContent = autoMuted && muted ? t('aAuto') : muted ? t('aUser') : override !== null ? t('aOverride') : t('aOn');
+    flag.classList.add('hidden');
+    flag.parentElement.classList.toggle('auto-muted', autoMuted && muted);
+  }
+  // The viewer can mute/unmute inside the player at any time; notice it quickly.
+  setInterval(syncMute, 500);
+
+  function renderEmbed() { renderPlayer(); syncMute(); }
+
+  function renderDebug() {
+    const d = (state && state.last_ocr_debug) || {};
+    $('debugLines').innerHTML = (d.lines || []).map((l) =>
+      `<tr class="${l.is_match ? 'match' : ''}"><td>${esc(l.text)}</td><td>${l.height_pct}</td><td>${l.match_score.toFixed(2)}</td><td>${l.is_match ? '✓' : ''}</td></tr>`).join('')
+      || '<tr><td colspan="4" class="empty">—</td></tr>';
+    $('debugDets').innerHTML = (d.detections || []).map((x, i) =>
+      `<tr class="${x.size_ok ? '' : 'rej'}"><td>${i}</td><td>${esc(x.text)}</td><td>${x.confidence.toFixed(2)}</td><td>${x.height_pct}</td><td>${x.size_ok ? t('sizeOk') : t('sizeRej')}</td></tr>`).join('')
+      || '<tr><td colspan="5" class="empty">—</td></tr>';
+    $('debugMeta').textContent = d.note ? d.note
+      : d.classification ? `verdict=${d.classification} · matches=${d.match_count}${d.occluded ? ' · occluded' : ''} · ocr=${d.elapsed_ms}ms · ${d.frame_at || ''}` : t('noData');
+  }
+
+  function tick() {
+    const s = state; if (!s) return;
+    let cur = 0;
+    if (s.speaker_state === 'VUCIC_SPEAKING' && s.current_session_started_at) {
+      cur = Math.max(0, nowServer() - Date.parse(s.current_session_started_at) / 1000);
+    }
+    const extra = Math.max(0, cur - (s.current_session_duration_sec || 0));
+    const add = s.speaker_state === 'VUCIC_SPEAKING' && !s.simulation_active ? extra : 0;
+    const lt = $('liveTimer'); if (lt) lt.textContent = fmtDur(cur);
+    $('statToday').textContent = fmtDur(s.total_vucic_time_today_sec + add);
+    $('statAll').textContent = fmtDur(s.total_vucic_time_all_time_sec + add);
+    $('statLast').textContent = s.speaker_state === 'VUCIC_SPEAKING' ? t('speakingNow') : relTime(s.last_spoke_timestamp);
+    $('lastFrame').textContent = s.last_frame_at ? relTime(s.last_frame_at) : '—';
+    $('lastCheck').textContent = s.last_live_check ? relTime(s.last_live_check) : '—';
+    const cd = $('countdown');
+    if (cd && s.next_session_at) {
+      const left = Math.max(0, Date.parse(s.next_session_at) / 1000 - nowServer());
+      const d = Math.floor(left / 86400);
+      cd.textContent = (d ? `${d}d ` : '') + fmtClock(left % 86400);
+    }
+    const bt = $('breakTimer');
+    if (bt && s.break_started_at) bt.textContent = fmtDur(nowServer() - Date.parse(s.break_started_at) / 1000);
+    document.title = s.speaker_state === 'VUCIC_SPEAKING' ? t('docTitleV')(fmtDur(cur)) : t('docTitle');
+  }
+
+  function applyState(s) {
+    state = s;
+    if (typeof s.server_epoch === 'number') clockOffset = s.server_epoch - Date.now() / 1000;
+    renderHero(false); renderStatic(); tick();
+  }
+
+  // ------------------------------------------------------------------ SSE
+  function onSpeechEnded(d) {
+    const key = `${d.start}|${d.end}`;
+    if (seenEndings.has(key)) return;
+    seenEndings.add(key);
+    celebrate(d.duration_sec);
+  }
+
+  // Push (SSE) first. Some proxies, e.g. Cloudflare quick tunnels, buffer event streams,
+  // so if no event arrives soon we fall back to polling /api/state.
+  let polling = false;
+  function connect() {
+    const es = new EventSource('/api/events');
+    let gotEvent = false;
+    es.onopen = () => { if (!polling) { conn = 'live'; renderConn(); } };
+    es.onerror = () => { if (!polling) { conn = 'retry'; renderConn(); } };
+    es.addEventListener('state', (e) => { gotEvent = true; if (!polling) applyState(JSON.parse(e.data)); });
+    es.addEventListener('speech_ended', (e) => { if (!polling) onSpeechEnded(JSON.parse(e.data)); });
+    setTimeout(() => { if (!gotEvent) { es.close(); startPolling(); } }, 6000);
+  }
+
+  // Light polling: the small public /api/v1/status (~0.6 KB) every 2 s; the full state
+  // (~2.5 KB: stats, history, OCR debug) only when something changed, or every 30 s.
+  const statusKey = (x) => [x.speaker_state, x.stream_status, x.video_id, x.current_session_started_at,
+    x.simulated ?? x.simulation_active, x.last_spoke_timestamp, (x.last_speech_ended || {}).ended_epoch,
+    x.on_break, x.next_session_at].join('|');
+  function startPolling() {
+    polling = true;
+    let prev = state;
+    let lastFull = 0;
+    const poll = async () => {
+      try {
+        const st = await (await fetch('/api/v1/status', { cache: 'no-store' })).json();
+        conn = 'live'; renderConn();
+        if (state && statusKey(st) === statusKey(state) && Date.now() - lastFull < 30000) {
+          // Nothing changed: refresh only the cheap live fields.
+          state.last_frame_at = st.last_frame_at;
+          state.current_session_duration_sec = st.current_session_duration_sec;
+          if (typeof st.server_epoch === 'number') clockOffset = st.server_epoch - Date.now() / 1000;
+          tick();
+          return;
+        }
+        const s = await (await fetch('/api/state', { cache: 'no-store' })).json();
+        lastFull = Date.now();
+        // Without SSE there is no speech_ended event: the server reports the last ended
+        // speech in the state; celebrate when a new one appears (not on first load).
+        const ended = s.last_speech_ended;
+        if (prev && ended && (!prev.last_speech_ended || prev.last_speech_ended.ended_epoch !== ended.ended_epoch)
+            && s.server_epoch - ended.ended_epoch < 60) {
+          onSpeechEnded(ended);
+        }
+        prev = s;
+        applyState(s);
+      } catch (_) { conn = 'retry'; renderConn(); }
+    };
+    poll();
+    setInterval(poll, 2000);
+  }
+
+  // ------------------------------------------------------------------ debug drawer
+  const debugEl = $('debug');
+  let debugTimer = null;
+  async function refreshDebug() {
+    $('debugImg').src = `/api/debug/frame.jpg?t=${Date.now()}`;
+    try { applyState(await (await fetch('/api/state', { cache: 'no-store' })).json()); } catch (_) {}
+  }
+  debugEl.addEventListener('toggle', () => {
+    clearInterval(debugTimer);
+    if (debugEl.open) { refreshDebug(); debugTimer = setInterval(refreshDebug, 2000); }
+  });
+  document.querySelectorAll('.sim').forEach((btn) => btn.addEventListener('click', async () => {
+    if (audio.enabled) audio.ensure();
+    try {
+      const r = await fetch('/api/simulate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ state: btn.dataset.sim }) });
+      if (!r.ok) console.warn('simulate failed', await r.text());
+    } catch (err) { console.warn(err); }
+  }));
+
+  // Simulation buttons are admin-only (this machine); hide them for public visitors.
+  fetch('/api/whoami', { cache: 'no-store' }).then((r) => r.json())
+    .then((w) => $('simBox').classList.toggle('hidden', !w.admin)).catch(() => {});
+
+  applyLang();
+  setInterval(tick, 1000);
+  // `?poll=1` forces polling mode (debugging proxies that buffer SSE).
+  if (new URLSearchParams(location.search).has('poll')) startPolling(); else connect();
+})();
+</script>
+</body>
+</html>

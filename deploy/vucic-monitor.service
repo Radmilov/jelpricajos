@@ -1,0 +1,36 @@
+[Unit]
+Description=Vučić Speaking Monitor (Parlament Srbija OCR + dashboard)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=vucic
+Group=vucic
+WorkingDirectory=/opt/vucic-monitor
+EnvironmentFile=/etc/vucic-monitor.env
+Environment=HOME=/var/lib/vucic-monitor
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONWARNINGS=ignore
+# Fewer glibc malloc arenas: noticeably lower RSS for PyTorch on small (1 GB) VPSes.
+Environment=MALLOC_ARENA_MAX=2
+Environment=PATH=/opt/vucic-monitor/.venv/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/opt/vucic-monitor/.venv/bin/python /opt/vucic-monitor/app.py
+Restart=always
+RestartSec=5
+# Stop gracefully so an in-progress speech is saved.
+KillSignal=SIGINT
+TimeoutStopSec=20
+
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/vucic-monitor
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,90 @@
+{
+  "extName": {
+    "message": "Vučić Mute"
+  },
+  "extDescription": {
+    "message": "Automatski utišava (i po želji zamućuje) YouTube dok Aleksandar Vučić govori u Narodnoj skupštini."
+  },
+  "statusVucic": {
+    "message": "Vučić govori"
+  },
+  "statusParty": {
+    "message": "Govori poslanik SNS koalicije"
+  },
+  "statusOther": {
+    "message": "Vučić ne govori"
+  },
+  "statusOffline": {
+    "message": "Skupština nije uživo"
+  },
+  "statusError": {
+    "message": "Monitor nije dostupan"
+  },
+  "statusLoading": {
+    "message": "Povezivanje…"
+  },
+  "mutingNow": {
+    "message": "Utišano YouTube tabova: $COUNT$",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "notMuting": {
+    "message": "Zvuk nije utišan"
+  },
+  "simulated": {
+    "message": "simulirano"
+  },
+  "optEnabled": {
+    "message": "Utišaj YouTube dok Vučić govori"
+  },
+  "optParty": {
+    "message": "Isto i za poslanike njegove grupe"
+  },
+  "optPartyHint": {
+    "message": "Utišavanje i zamućenje važe i za „Aleksandar Vučić – Srbija pobeđuje”"
+  },
+  "optScope": {
+    "message": "Koje tabove"
+  },
+  "scopeAll": {
+    "message": "Sve YouTube tabove"
+  },
+  "scopeParliament": {
+    "message": "Samo prenos Skupštine"
+  },
+  "optApi": {
+    "message": "Adresa monitor API-ja"
+  },
+  "save": {
+    "message": "Sačuvaj"
+  },
+  "saved": {
+    "message": "Sačuvano"
+  },
+  "permDenied": {
+    "message": "Dozvola za ovu adresu nije odobrena"
+  },
+  "invalidUrl": {
+    "message": "Unesi ispravnu http(s) adresu"
+  },
+  "openDashboard": {
+    "message": "Otvori dashboard"
+  },
+  "since": {
+    "message": "već $TIME$",
+    "placeholders": {
+      "time": {
+        "content": "$1"
+      }
+    }
+  },
+  "optBlur": {
+    "message": "Zamuti video dok Vučić govori"
+  },
+  "blurringNow": {
+    "message": "video zamućen"
+  }
+}

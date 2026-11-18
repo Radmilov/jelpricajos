@@ -1,0 +1,90 @@
+{
+  "extName": {
+    "message": "Vučić Mute"
+  },
+  "extDescription": {
+    "message": "Automatically mutes (and optionally blurs) YouTube while Aleksandar Vučić is speaking in the National Assembly."
+  },
+  "statusVucic": {
+    "message": "Vučić is speaking"
+  },
+  "statusParty": {
+    "message": "SNS coalition MP speaking"
+  },
+  "statusOther": {
+    "message": "Vučić is not speaking"
+  },
+  "statusOffline": {
+    "message": "Parliament is offline"
+  },
+  "statusError": {
+    "message": "Monitor unreachable"
+  },
+  "statusLoading": {
+    "message": "Connecting…"
+  },
+  "mutingNow": {
+    "message": "Muting $COUNT$ YouTube tab(s)",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "notMuting": {
+    "message": "Not muting"
+  },
+  "simulated": {
+    "message": "simulated"
+  },
+  "optEnabled": {
+    "message": "Mute YouTube while Vučić speaks"
+  },
+  "optParty": {
+    "message": "Same for MPs of his party group"
+  },
+  "optPartyHint": {
+    "message": "Mute and blur also apply to “Aleksandar Vučić – Srbija pobeđuje”"
+  },
+  "optScope": {
+    "message": "Which tabs"
+  },
+  "scopeAll": {
+    "message": "All YouTube tabs"
+  },
+  "scopeParliament": {
+    "message": "Only the Parliament stream"
+  },
+  "optApi": {
+    "message": "Monitor API URL"
+  },
+  "save": {
+    "message": "Save"
+  },
+  "saved": {
+    "message": "Saved"
+  },
+  "permDenied": {
+    "message": "Permission for this host was not granted"
+  },
+  "invalidUrl": {
+    "message": "Enter a valid http(s) URL"
+  },
+  "openDashboard": {
+    "message": "Open dashboard"
+  },
+  "since": {
+    "message": "for $TIME$",
+    "placeholders": {
+      "time": {
+        "content": "$1"
+      }
+    }
+  },
+  "optBlur": {
+    "message": "Blur the video while Vučić speaks"
+  },
+  "blurringNow": {
+    "message": "video blurred"
+  }
+}

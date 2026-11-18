@@ -1,0 +1,13 @@
+fastapi>=0.110
+uvicorn[standard]>=0.29
+yt-dlp>=2026.10.26
+easyocr>=1.7.1
+opencv-python-headless>=4.9
+numpy>=1.26
+rapidfuzz>=3.6
+aiosqlite>=0.20
+# Bundled ffmpeg binary, used automatically when `ffmpeg` is not on PATH.
+imageio-ffmpeg>=0.5
+# Optional alternative OCR backend (OCR_BACKEND=tesseract); needs the Tesseract binary + `srp` data.
+# pytesseract>=0.3.10
+# Tests: pip install pytest pillow

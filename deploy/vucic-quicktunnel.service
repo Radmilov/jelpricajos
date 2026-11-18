@@ -1,0 +1,14 @@
+[Unit]
+Description=Temporary Cloudflare quick tunnel for the Vučić monitor (random trycloudflare.com URL)
+After=network-online.target vucic-monitor.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+DynamicUser=true
+ExecStart=/usr/bin/cloudflared tunnel --no-autoupdate --url http://127.0.0.1:8000
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
