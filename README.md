@@ -39,8 +39,9 @@ change the state.
   time yourself:
   `sudo bash /opt/jelpricajos/deploy/next-session.sh "2026-11-19 10:00"` (Serbian time),
   or `… clear`. A stream scheduled on YouTube, if one ever appears, takes precedence.
-* **ROI:** `x 0.22–0.82 W`, `y 0.80–1.00 H`, a tight crop around the caption, calibrated against
-  the live stream. The group line sits at ~0.93–0.99 H. The top edge also covers the large animated
+* **ROI:** `x 0.00–0.82 W`, `y 0.80–1.00 H`, the bottom strip where the caption appears, calibrated
+  against the live stream. The broadcast has placed the caption both at ~0.28 W and flush with the
+  bottom-left corner, so the crop starts at the left edge. The group line sits at ~0.93–0.99 H. The top edge also covers the large animated
   chyron, which the occlusion check needs.
 * **Size filter:** only boxes between **3.0 % and 6.8 % of H** count. On the real stream the
   caption lines measure 5.6–6.2 %. The large animated "embossed" chyron measures 7.2–8.5 % and is
