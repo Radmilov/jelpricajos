@@ -25,25 +25,45 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 import config
-from ocr_engine import PARTY_MEMBER_SPEAKING, VUCIC_SPEAKING
-from stream_monitor import StreamMonitor
+from common import PARTY_MEMBER_SPEAKING, VUCIC_SPEAKING, parse_iso
 
 logging.basicConfig(level=config.LOG_LEVEL,
                     format="%(asctime)s %(levelname)-7s %(name)s: %(message)s")
 log = logging.getLogger("app")
 
 STATIC_DIR = config.BASE_DIR / "static"
-API_VERSION = "1.0"
-monitor = StreamMonitor()
+API_VERSION = "1.1"
+
+if config.MODE not in ("standalone", "worker", "relay"):
+    raise SystemExit(f"MODE must be standalone, worker or relay (got {config.MODE!r})")
+IS_RELAY = config.MODE == "relay"
+
+# The relay must not import the OCR stack (OpenCV/PyTorch/yt-dlp): import lazily per mode.
+if IS_RELAY:
+    from relay import RelayHub
+    monitor = RelayHub()
+else:
+    from stream_monitor import StreamMonitor
+    monitor = StreamMonitor()
+
+publisher = None
+if config.MODE == "worker":
+    from relay import RelayPublisher
+    publisher = RelayPublisher(monitor)
+    publisher.check_config()  # fail fast on a bad RELAY_URL / missing token
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     await monitor.start()
-    log.info("Dashboard: http://%s:%s  ·  API docs: /docs", config.HOST, config.PORT)
+    pub_task = asyncio.create_task(publisher.run(), name="relay-publisher") if publisher else None
+    log.info("Mode: %s · Dashboard: http://%s:%s · API docs: /docs", config.MODE, config.HOST, config.PORT)
     try:
         yield
     finally:
+        if pub_task:
+            pub_task.cancel()
+            await asyncio.gather(pub_task, return_exceptions=True)
         await monitor.stop()
 
 
@@ -169,6 +189,7 @@ def public_status(s: Dict[str, Any]) -> Dict[str, Any]:
         "on_break": s["on_break"],
         "break_started_at": s["break_started_at"],
         "next_session_at": s["next_session_at"],
+        "monitor_online": s.get("monitor_online", True),
         "updated_at": s["server_time"],
         "server_epoch": round(s["server_epoch"], 3),
     }
@@ -282,7 +303,8 @@ def _status_key():
     s = monitor.snapshot()
     return (s["speaker_state"], s["stream_status"], s["video_id"], s["current_session_started_at"],
             s["simulation_active"], s["last_spoke_timestamp"],
-            (s["last_speech_ended"] or {}).get("ended_epoch"), s["on_break"], s["next_session_at"])
+            (s["last_speech_ended"] or {}).get("ended_epoch"), s["on_break"], s["next_session_at"],
+            s.get("monitor_online", True))
 
 
 # ---------------------------------------------------------------------------
@@ -312,8 +334,10 @@ async def whoami(request: Request):
 
 @app.get("/api/debug/frame.jpg", tags=["dashboard"], summary="Latest annotated OCR region")
 async def debug_frame():
-    return Response(content=monitor.debug_jpeg, media_type="image/jpeg",
-                    headers={"Cache-Control": "no-store"})
+    jpeg = monitor.debug_jpeg
+    if not jpeg:
+        return Response(status_code=204, headers={"Cache-Control": "no-store"})
+    return Response(content=jpeg, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
 
 
 class SimulateRequest(BaseModel):
@@ -343,13 +367,55 @@ async def set_next_session(req: NextSessionRequest, request: Request):
     {"at": null} clears it. A scheduled YouTube stream, if any, takes precedence."""
     if not is_admin(request):
         raise HTTPException(status_code=403, detail="Admin only")
-    from stream_monitor import parse_iso
     ts = None
     if req.at:
         ts = parse_iso(req.at)
         if ts is None:
             raise HTTPException(status_code=400, detail="`at` must be ISO-8601, e.g. 2026-11-19T10:00")
     return JSONResponse(await monitor.set_next_session(ts))
+
+
+# ---------------------------------------------------------------------------
+# Relay ingest (MODE=relay): the worker pushes state here
+# ---------------------------------------------------------------------------
+
+def _require_worker(request: Request) -> None:
+    if not IS_RELAY:
+        raise HTTPException(status_code=404, detail="Not a relay")
+    auth = request.headers.get("authorization", "")
+    token = auth[7:] if auth.lower().startswith("bearer ") else ""
+    if not config.RELAY_TOKEN or not token or not hmac.compare_digest(token, config.RELAY_TOKEN):
+        raise HTTPException(status_code=401, detail="Bad or missing worker token")
+
+
+async def _read_body(request: Request) -> bytes:
+    size = int(request.headers.get("content-length") or 0)
+    if size > config.RELAY_MAX_BODY_BYTES:
+        raise HTTPException(status_code=413, detail="Body too large")
+    body = await request.body()
+    if len(body) > config.RELAY_MAX_BODY_BYTES:
+        raise HTTPException(status_code=413, detail="Body too large")
+    return body
+
+
+@app.post("/api/ingest", include_in_schema=False)
+async def ingest(request: Request):
+    _require_worker(request)
+    try:
+        payload = json.loads(await _read_body(request))
+        return JSONResponse(await monitor.ingest(payload))
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/ingest/frame", include_in_schema=False)
+async def ingest_frame(request: Request):
+    _require_worker(request)
+    try:
+        monitor.ingest_frame(await _read_body(request))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True}
 
 
 # ---------------------------------------------------------------------------
@@ -390,8 +456,15 @@ async def v1_events(request: Request):
 @app.get("/api/v1/health", tags=["public v1"], summary="Liveness check")
 async def v1_health():
     s = monitor.snapshot()
-    return {"ok": True, "ocr_ready": s["ocr_ready"], "stream_status": s["stream_status"],
-            "last_frame_at": s["last_frame_at"]}
+    out = {"ok": True, "mode": config.MODE, "ocr_ready": s["ocr_ready"],
+           "stream_status": s["stream_status"], "last_frame_at": s["last_frame_at"],
+           "monitor_online": s.get("monitor_online", True)}
+    if IS_RELAY:
+        out["monitor_last_seen"] = s.get("monitor_last_seen")
+    if publisher:
+        out["relay"] = {"url": config.RELAY_URL, "last_push_ok": publisher.last_ok and
+                        __import__("common").iso(publisher.last_ok), "error": publisher.last_error}
+    return out
 
 
 if __name__ == "__main__":

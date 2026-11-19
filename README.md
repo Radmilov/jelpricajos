@@ -160,6 +160,47 @@ pip install --force-reinstall torch torchvision --index-url https://download.pyt
 # then run with OCR_GPU=1  (PowerShell: $env:OCR_GPU=1; python app.py)
 ```
 
+## Recommended setup: home worker + public relay
+
+```
+YouTube ──► home PC  MODE=worker   (yt-dlp + ffmpeg + OCR; outgoing HTTPS only)
+                │  POST /api/ingest   Authorization: Bearer <RELAY_TOKEN>
+                ▼
+            VPS      MODE=relay    (website + API only, ~100 MB RAM, no OCR)
+                ▲
+     visitors ──┘
+```
+
+* **Nothing at home accepts connections.** There's no tunnel or open port on the home PC, so
+  visitors have no path to it.
+* **YouTube sees a home IP,** so there's no "confirm you're not a bot" and no cookies.
+* **The relay is tiny** and holds no personal data. The cheapest VPS works, including Oracle's
+  free AMD micro instance.
+* **If the home PC is off, the site stays up.** It says "monitor offline" with the time of the
+  last report, keeps the player, and stops auto-muting.
+* **Admin actions work from the relay.** `next-session.sh` and `/api/simulate` on the relay are
+  queued and handed to the worker in the reply to its next push, within about 5 s.
+* **Security.** Pushes must carry the token, compared in constant time. The worker refuses to send
+  it over plain `http://` except to localhost. Bodies are size-limited.
+* **Error details** from the worker (paths, yt-dlp messages) are still hidden from the public.
+
+Set it up:
+
+1. **Relay on the VPS:**
+   `.\deploy\upload.ps1 -Server root@<IP> -Key <key> -Role relay [-TunnelToken <TOKEN>]`.
+   The installer skips PyTorch, ffmpeg and the OCR models, then prints a `RELAY_TOKEN`.
+2. **Worker at home:**
+   `.\deploy\install-worker.ps1 -RelayUrl https://<relay-url> -Token <RELAY_TOKEN>`.
+   This writes `local.env` (git-ignored, readable only by you) and registers a Task Scheduler
+   task that starts the worker at logon and restarts it if it crashes. Remove it with
+   `-Uninstall`.
+3. **Stop the quick tunnel on the home PC.** It's no longer needed. The local dashboard stays on
+   http://127.0.0.1:8000, and `/api/v1/health` there shows the last successful push.
+
+Modes (`MODE` in the environment or `local.env`): `standalone` (default, everything on one
+machine), `worker`, `relay`. Related settings: `RELAY_URL`, `RELAY_TOKEN`,
+`RELAY_HEARTBEAT_SEC` (5), `RELAY_FRAME_PUSH_SEC` (10, debug image), `RELAY_STALE_SEC` (30).
+
 ## Deploying to a VPS
 
 The `deploy/` folder holds everything needed. It targets Ubuntu 22.04/24.04 on either x86_64 or
@@ -379,6 +420,8 @@ stream_monitor.py   yt-dlp discovery, ffmpeg grabber, debounce state machine, SQ
 app.py              FastAPI server
 static/index.html   dashboard (Tailwind, canvas-confetti, Web Audio fanfare, SSE client)
 tests/              unit + synthetic OCR tests
-deploy/             VPS installer, systemd units, Windows upload script
+deploy/             VPS installer (full or relay), systemd units, Windows upload + worker scripts
+common.py           dependency-free shared bits (the relay imports only this)
+relay.py            RelayHub (public side) and RelayPublisher (home worker)
 extension/          Chrome extension (MV3) that mutes YouTube while he speaks
 ```

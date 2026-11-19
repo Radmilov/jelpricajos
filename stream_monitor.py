@@ -20,39 +20,13 @@ import cv2
 import numpy as np
 
 import config
-from ocr_engine import (
-    OCREngine, OTHER_OR_NONE, PARTY_MEMBER_SPEAKING, VUCIC_SPEAKING, crop_roi, is_break_screen,
-    placeholder_image,
+from common import (  # noqa: F401  (re-exported: other modules/tests import them from here)
+    CONNECTING, LIVE, OFFLINE, OTHER_OR_NONE, PARTY_MEMBER_SPEAKING, SPEAKER_STATES,
+    VUCIC_SPEAKING, Broadcaster, iso, local_midnight, parse_iso,
 )
+from ocr_engine import OCREngine, crop_roi, is_break_screen, placeholder_image
 
 log = logging.getLogger("monitor")
-
-LIVE = "LIVE"
-OFFLINE = "OFFLINE"
-CONNECTING = "CONNECTING"
-SPEAKER_STATES = (VUCIC_SPEAKING, PARTY_MEMBER_SPEAKING, OTHER_OR_NONE)
-
-
-def iso(ts: Optional[float]) -> Optional[str]:
-    if ts is None:
-        return None
-    return datetime.fromtimestamp(ts, tz=timezone.utc).astimezone().isoformat(timespec="seconds")
-
-
-def parse_iso(value: str) -> Optional[float]:
-    """ISO-8601 -> epoch. A time without an offset is taken as this machine's local time."""
-    try:
-        dt = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
-    except (ValueError, AttributeError):
-        return None
-    if dt.tzinfo is None:
-        dt = dt.astimezone()
-    return dt.timestamp()
-
-
-def local_midnight(now: Optional[float] = None) -> float:
-    dt = datetime.fromtimestamp(now or time.time()).replace(hour=0, minute=0, second=0, microsecond=0)
-    return dt.timestamp()
 
 
 # ---------------------------------------------------------------------------
@@ -423,37 +397,6 @@ class SpeechStore:
             "recent": [{"id": r[0], "start": iso(r[1]), "end": iso(r[2]),
                         "duration_sec": round(r[3], 1), "stream_title": r[4]} for r in rows],
         }
-
-
-# ---------------------------------------------------------------------------
-# SSE broadcaster
-# ---------------------------------------------------------------------------
-
-class Broadcaster:
-    def __init__(self):
-        self._subs: Set[asyncio.Queue] = set()
-
-    def subscribe(self) -> asyncio.Queue:
-        q: asyncio.Queue = asyncio.Queue(maxsize=50)
-        self._subs.add(q)
-        return q
-
-    def unsubscribe(self, q: asyncio.Queue) -> None:
-        self._subs.discard(q)
-
-    def publish(self, event: str, data: Dict[str, Any]) -> None:
-        msg = f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
-        for q in list(self._subs):
-            if q.full():
-                try:
-                    q.get_nowait()
-                except asyncio.QueueEmpty:
-                    pass
-            q.put_nowait(msg)
-
-    @property
-    def count(self) -> int:
-        return len(self._subs)
 
 
 # ---------------------------------------------------------------------------

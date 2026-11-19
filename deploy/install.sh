@@ -4,6 +4,8 @@
 # Run from the unpacked project folder:
 #   sudo bash deploy/install.sh                 # install or update
 #   sudo CF_TUNNEL_TOKEN=xxxx bash deploy/install.sh   # + permanent Cloudflare tunnel
+#   sudo ROLE=relay bash deploy/install.sh        # public relay only (no OCR, ~100 MB RAM);
+#                                                 # the OCR worker runs at home and pushes to it
 #
 # Safe to re-run: it updates code and dependencies in place and keeps the database,
 # the env file and the cookies.
@@ -24,6 +26,8 @@ die() { printf '\033[31mERROR: %s\033[0m\n' "$*" >&2; exit 1; }
 command -v apt-get >/dev/null || die "this script supports Debian/Ubuntu only"
 
 ARCH="$(dpkg --print-architecture)"   # amd64 | arm64
+ROLE="${ROLE:-full}"                  # full (OCR + website) | relay (website fed by a worker)
+[[ "$ROLE" == "full" || "$ROLE" == "relay" ]] || die "ROLE must be full or relay"
 
 # ---------------------------------------------------------------- swap (small VPS)
 mem_mb=$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)
@@ -43,7 +47,9 @@ fi
 log "Installing system packages"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
-apt-get install -y -qq python3 python3-venv python3-pip ffmpeg curl unzip ca-certificates rsync >/dev/null
+PKGS=(python3 python3-venv python3-pip curl unzip ca-certificates rsync)
+[[ "$ROLE" == "full" ]] && PKGS+=(ffmpeg)
+apt-get install -y -qq "${PKGS[@]}" >/dev/null
 
 PY_OK=$(python3 -c 'import sys; print(int(sys.version_info >= (3, 10)))')
 [[ "$PY_OK" == "1" ]] || die "Python 3.10+ required (found $(python3 --version))"
@@ -107,8 +113,8 @@ EOF
   fi
 fi
 
-# Deno: the JavaScript runtime yt-dlp uses for YouTube extraction.
-if ! command -v deno >/dev/null; then
+# Deno: the JavaScript runtime yt-dlp uses for YouTube extraction (not needed on a relay).
+if [[ "$ROLE" == "full" ]] && ! command -v deno >/dev/null; then
   log "Installing Deno (for yt-dlp)"
   curl -fsSL https://deno.land/install.sh | DENO_INSTALL=/usr/local sh -s -- -y >/dev/null \
     || echo "  (Deno install failed — yt-dlp still works for live HLS, just with a warning)"
@@ -139,16 +145,21 @@ chown -R "$APP_USER:$APP_USER" "$DATA_DIR"
 chown -R root:root "$APP_DIR"
 
 # ---------------------------------------------------------------- Python env
-log "Setting up Python environment (first run downloads ~1 GB, takes a few minutes)"
 [[ -d "${APP_DIR}/.venv" ]] || python3 -m venv "${APP_DIR}/.venv"
 PIP="${APP_DIR}/.venv/bin/pip"
 "$PIP" install -q --upgrade pip wheel
-if [[ "$ARCH" == "amd64" ]]; then
-  # CPU-only PyTorch: avoids pulling ~2.5 GB of CUDA libraries a VPS can't use.
-  "$PIP" install -q torch torchvision --index-url https://download.pytorch.org/whl/cpu
+if [[ "$ROLE" == "relay" ]]; then
+  log "Setting up Python environment (relay: web server only)"
+  "$PIP" install -q -r "${APP_DIR}/requirements-relay.txt"
+else
+  log "Setting up Python environment (first run downloads ~1 GB, takes a few minutes)"
+  if [[ "$ARCH" == "amd64" ]]; then
+    # CPU-only PyTorch: avoids pulling ~2.5 GB of CUDA libraries a VPS can't use.
+    "$PIP" install -q torch torchvision --index-url https://download.pytorch.org/whl/cpu
+  fi
+  "$PIP" install -q -r "${APP_DIR}/requirements.txt"
+  "$PIP" install -q --upgrade yt-dlp   # YouTube changes often; always take the latest
 fi
-"$PIP" install -q -r "${APP_DIR}/requirements.txt"
-"$PIP" install -q --upgrade yt-dlp   # YouTube changes often; always take the latest
 
 # ---------------------------------------------------------------- config
 if [[ ! -f "$ENV_FILE" ]]; then
@@ -160,11 +171,26 @@ if [[ -f "${DATA_DIR}/cookies.txt" ]] && ! grep -q '^YTDLP_COOKIES_FILE=' "$ENV_
   echo "YTDLP_COOKIES_FILE=${DATA_DIR}/cookies.txt" >> "$ENV_FILE"
 fi
 
+# MODE in the env file follows ROLE (standalone on a full install, relay on a relay).
+WANT_MODE="standalone"; [[ "$ROLE" == "relay" ]] && WANT_MODE="relay"
+if grep -q '^MODE=' "$ENV_FILE"; then
+  sed -i "s/^MODE=.*/MODE=${WANT_MODE}/" "$ENV_FILE"
+else
+  echo "MODE=${WANT_MODE}" >> "$ENV_FILE"
+fi
+if [[ "$ROLE" == "relay" ]] && ! grep -q '^RELAY_TOKEN=.\+' "$ENV_FILE"; then
+  log "Generating the worker token"
+  sed -i '/^RELAY_TOKEN=/d' "$ENV_FILE"
+  echo "RELAY_TOKEN=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')" >> "$ENV_FILE"
+fi
+
 # ---------------------------------------------------------------- OCR models
-log "Downloading EasyOCR models"
-sudo -u "$APP_USER" HOME="$DATA_DIR" "${APP_DIR}/.venv/bin/python" -c \
-  "import easyocr; easyocr.Reader(['rs_cyrillic'], gpu=False, verbose=False)" \
-  || die "EasyOCR model download failed"
+if [[ "$ROLE" == "full" ]]; then
+  log "Downloading EasyOCR models"
+  sudo -u "$APP_USER" HOME="$DATA_DIR" "${APP_DIR}/.venv/bin/python" -c \
+    "import easyocr; easyocr.Reader(['rs_cyrillic'], gpu=False, verbose=False)" \
+    || die "EasyOCR model download failed"
+fi
 
 # ---------------------------------------------------------------- systemd
 log "Installing systemd service"
@@ -231,6 +257,16 @@ if [[ "$TUNNEL_MODE" == "quick" ]]; then
   log "Done. Public URL (changes when the tunnel restarts): ${URL:-run: sudo bash ${APP_DIR}/deploy/status.sh}"
 else
   log "Done. Reachable at the hostname configured for your Cloudflare tunnel."
+fi
+if [[ "$ROLE" == "relay" ]]; then
+  TOKEN=$(sed -n 's/^RELAY_TOKEN=//p' "$ENV_FILE" | tail -1)
+  echo
+  echo "  Relay mode: this server shows what your home worker reports."
+  echo "  Put these two lines into local.env next to app.py on your home PC:"
+  echo "      MODE=worker"
+  echo "      RELAY_URL=<this site's public https:// URL>"
+  echo "      RELAY_TOKEN=${TOKEN}"
+  echo "  (the token is secret: anyone who has it can feed this site)"
 fi
 echo "  Status:  sudo bash ${APP_DIR}/deploy/status.sh"
 echo "  Logs:    journalctl -u ${APP_NAME} -f"

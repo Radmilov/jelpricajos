@@ -18,7 +18,8 @@ param(
   [string] $Key = "",                                # path to SSH private key (optional)
   [string] $TunnelToken = "",                        # Cloudflare tunnel token (optional)
   [string] $Cookies = "",                            # path to a YouTube cookies.txt (optional)
-  [switch] $NoData                                   # don't send the local speech database
+  [switch] $NoData,                                  # don't send the local speech database
+  [ValidateSet("full", "relay")] [string] $Role = "full"  # relay: website only, OCR stays at home
 )
 $ErrorActionPreference = "Stop"
 
@@ -74,8 +75,8 @@ try {
   if ($LASTEXITCODE -ne 0) { throw "upload failed" }
 
   Write-Host "==> Installing on the server (first run takes 5-15 minutes)" -ForegroundColor Cyan
-  $envPrefix = ""
-  if ($TunnelToken) { $envPrefix = "CF_TUNNEL_TOKEN='$TunnelToken' " }
+  $envPrefix = "ROLE=$Role "
+  if ($TunnelToken) { $envPrefix += "CF_TUNNEL_TOKEN='$TunnelToken' " }
   $remote = @(
     "set -e",
     "cd ~/jelpricajos-upload",

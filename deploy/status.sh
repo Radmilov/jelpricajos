@@ -17,7 +17,11 @@ d = json.loads(sys.argv[1])
 print(f"  stream:  {d['stream_status']}  {d.get('stream_title') or ''}")
 print(f"  speaker: {d['speaker_state']}")
 print(f"  last frame: {d.get('last_frame_at')}")
+if d.get("monitor_online") is False:
+    print("  WORKER: offline - the home PC is not pushing (is it on? see its /api/v1/health)")
 PY
+  mode=$(grep -s '^MODE=' /etc/jelpricajos.env | cut -d= -f2)
+  echo "  mode: ${mode:-standalone}"
 else
   echo "  not responding — check: journalctl -u jelpricajos -n 50"
 fi

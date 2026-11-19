@@ -1,12 +1,31 @@
 """Tunable settings for the Parlament Srbija / Vučić speaker monitor.
 
 Every value can be overridden with an environment variable of the same name
-(e.g. `set OCR_GPU=1` on Windows or `export OCR_GPU=1` on macOS/Linux).
+(e.g. `set OCR_GPU=1` on Windows or `export OCR_GPU=1` on macOS/Linux), or with a
+`KEY=value` line in `local.env` next to this file (git-ignored; real environment
+variables win over it).
 """
 from __future__ import annotations
 
 import os
 from pathlib import Path
+
+
+def _load_local_env(path: Path) -> None:
+    """Minimal .env reader: KEY=value lines, '#' comments, optional quotes."""
+    if not path.is_file():
+        return
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key, value = key.strip(), value.strip().strip('"').strip("'")
+        if key and key not in os.environ:
+            os.environ[key] = value
+
+
+_load_local_env(Path(__file__).resolve().parent / "local.env")
 
 
 def _env(name: str, default, cast=None):
@@ -158,3 +177,22 @@ BREAK_EXIT_FRAMES = _env("BREAK_EXIT_FRAMES", 2, int)
 NEXT_SESSION_AT = _env("NEXT_SESSION_AT", "")  # ISO-8601, e.g. 2026-11-19T10:00:00+01:00
 CHANNEL_STREAMS_URL = _env("CHANNEL_STREAMS_URL", "https://www.youtube.com/@ParlamentSrbija/streams")
 UPCOMING_CHECK_INTERVAL_SEC = _env("UPCOMING_CHECK_INTERVAL_SEC", 900.0, float)
+
+# --- Deployment mode -----------------------------------------------------------
+#  standalone : everything on one machine (OCR + website), the original setup
+#  worker     : OCR on this machine; pushes state OUT to a relay; accepts no connections
+#               from the internet (the local dashboard still works on 127.0.0.1)
+#  relay      : public website/API only, fed by a worker; no OCR, no yt-dlp, no PyTorch
+MODE = _env("MODE", "standalone").strip().lower()
+# worker: base URL of the relay, e.g. https://jelpricajos.example.rs
+RELAY_URL = _env("RELAY_URL", "").rstrip("/")
+# both sides: shared secret the worker sends as "Authorization: Bearer <token>"
+RELAY_TOKEN = _env("RELAY_TOKEN", "")
+# worker: push at least this often even when nothing changed (lets the relay detect outages)
+RELAY_HEARTBEAT_SEC = _env("RELAY_HEARTBEAT_SEC", 5.0, float)
+# worker: also push the annotated OCR debug image this often (0 = never)
+RELAY_FRAME_PUSH_SEC = _env("RELAY_FRAME_PUSH_SEC", 10.0, float)
+# relay: treat the worker as offline after this long without a push
+RELAY_STALE_SEC = _env("RELAY_STALE_SEC", 30.0, float)
+# relay: largest accepted update / debug image
+RELAY_MAX_BODY_BYTES = _env("RELAY_MAX_BODY_BYTES", 2_000_000, int)

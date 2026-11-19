@@ -12,3 +12,4 @@ cookies.txt
 *.pem
 .vscode/
 .idea/
+local.env

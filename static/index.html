@@ -340,6 +340,9 @@
       heroN: 'Vučić ne govori',
       heroNsub: 'Reč ima neko drugi ili natpis nije na ekranu.',
       heroC: 'Povezivanje sa prenosom…',
+      monOff: 'Monitor je trenutno van mreže',
+      monOffSub: 'Računar koji prati prenos se ne javlja, pa ne znamo šta se trenutno dešava u Skupštini.',
+      monSeen: 'Poslednje javljanje', monNever: 'Monitor se još nije javio.', MONITOR_OFF: 'Monitor van mreže',
       heroOff: 'Prenos uživo nije aktivan',
       heroOffSub: 'Parlament Srbija trenutno ne emituje. Provera na svakih 30 sekundi.',
       nextIn: 'Sledeće zasedanje za', nextAt: 'Početak', nextUnknown: 'Termin sledećeg zasedanja još nije objavljen.',
@@ -394,6 +397,9 @@
       heroN: 'Vučić is not speaking',
       heroNsub: 'Someone else has the floor, or no caption is on screen.',
       heroC: 'Connecting to the stream…',
+      monOff: 'The monitor is offline',
+      monOffSub: 'The machine that watches the broadcast is not reporting, so we don’t know what is happening in the Assembly right now.',
+      monSeen: 'Last report', monNever: 'The monitor has not reported yet.', MONITOR_OFF: 'Monitor offline',
       heroOff: 'The livestream is not active',
       heroOffSub: 'Parlament Srbija is not broadcasting right now. Checking every 30 seconds.',
       nextIn: 'Next session in', nextAt: 'Starts', nextUnknown: 'The next session has not been announced yet.',
@@ -602,12 +608,20 @@
   let heroKey = null;
   function renderHero(force) {
     const s = state, hero = $('hero');
-    const key = s ? `${s.speaker_state}|${s.stream_status}|${s.simulation_active}|${s.current_session_started_at}|${s.stream_url}|${s.on_break}|${s.next_session_at}` : 'none';
+    const key = s ? `${s.speaker_state}|${s.stream_status}|${s.simulation_active}|${s.current_session_started_at}|${s.stream_url}|${s.on_break}|${s.next_session_at}|${s.monitor_online}` : 'none';
     if (!force && key === heroKey) return;
     heroKey = key;
     hero.classList.toggle('alert', !!s && s.speaker_state === 'VUCIC_SPEAKING');
     if (!s) { hero.innerHTML = `<div class="label">${t('status')}</div><h2>${t('connInit')}</h2>`; return; }
     const sim = s.simulation_active ? ` · <span class="tag mono">${t('simulated')}</span>` : '';
+    if (s.monitor_online === false) {
+      hero.innerHTML = `
+        <div class="label">${t('status')} · ${t('MONITOR_OFF')}</div>
+        <h2>${t('monOff')}</h2>
+        <p class="sub">${t('monOffSub')}</p>
+        <p class="sub mono" style="font-size:12px">${s.monitor_last_seen ? `${t('monSeen')}: <span id="monSeen"></span> · ${esc(fmtFull(s.monitor_last_seen))}` : t('monNever')}</p>`;
+      return;
+    }
     if (s.speaker_state === 'VUCIC_SPEAKING') {
       const link = s.stream_url ? ` · <a href="${esc(s.stream_url)}" target="_blank" rel="noopener">${t('watchLive')} ↗</a>` : '';
       hero.innerHTML = `
@@ -652,7 +666,7 @@
   function renderStatic() {
     const s = state; if (!s) return;
     const st = s.stream_status;
-    $('streamText').textContent = s.on_break ? t('BREAK') : (t(st) || st);
+    $('streamText').textContent = s.monitor_online === false ? t('MONITOR_OFF') : s.on_break ? t('BREAK') : (t(st) || st);
     $('streamDot').className = 'dot' + (st === 'LIVE' ? ' live' : st === 'CONNECTING' ? ' wait' : '');
     $('streamTitle').textContent = s.stream_title || (st === 'OFFLINE' ? t('noBroadcast') : '—');
     $('streamDetail').textContent = s.status_detail || '';
@@ -728,7 +742,8 @@
 
   async function renderPlayer() {
     const s = state;
-    const vid = s && s.video_id && s.stream_status !== 'OFFLINE' ? s.video_id : null;
+    // Keep the player when only the monitor is offline: the broadcast itself may well be on.
+    const vid = s && s.video_id && (s.stream_status !== 'OFFLINE' || s.monitor_online === false) ? s.video_id : null;
     const ph = $('playerPlaceholder');
     ph.textContent = t('embedNone');
     ph.classList.toggle('hidden', !!vid);
@@ -814,6 +829,8 @@
       const d = Math.floor(left / 86400);
       cd.textContent = (d ? `${d}d ` : '') + fmtClock(left % 86400);
     }
+    const ms = $('monSeen');
+    if (ms && s.monitor_last_seen) ms.textContent = relTime(s.monitor_last_seen);
     const bt = $('breakTimer');
     if (bt && s.break_started_at) bt.textContent = fmtDur(nowServer() - Date.parse(s.break_started_at) / 1000);
     document.title = s.speaker_state === 'VUCIC_SPEAKING' ? t('docTitleV')(fmtDur(cur)) : t('docTitle');
@@ -850,7 +867,7 @@
   // (~2.5 KB: stats, history, OCR debug) only when something changed, or every 30 s.
   const statusKey = (x) => [x.speaker_state, x.stream_status, x.video_id, x.current_session_started_at,
     x.simulated ?? x.simulation_active, x.last_spoke_timestamp, (x.last_speech_ended || {}).ended_epoch,
-    x.on_break, x.next_session_at].join('|');
+    x.on_break, x.next_session_at, x.monitor_online].join('|');
   function startPolling() {
     polling = true;
     let prev = state;

@@ -1,0 +1,4 @@
+# Relay only (MODE=relay): the public website/API fed by a home worker.
+# No OCR stack, so it runs in ~100 MB of RAM.
+fastapi>=0.110
+uvicorn[standard]>=0.29

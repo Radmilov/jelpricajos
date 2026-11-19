@@ -16,9 +16,7 @@ import config
 
 log = logging.getLogger("ocr")
 
-VUCIC_SPEAKING = "VUCIC_SPEAKING"
-PARTY_MEMBER_SPEAKING = "PARTY_MEMBER_SPEAKING"
-OTHER_OR_NONE = "OTHER_OR_NONE"
+from common import OTHER_OR_NONE, PARTY_MEMBER_SPEAKING, VUCIC_SPEAKING  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Text normalisation
