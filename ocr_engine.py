@@ -366,15 +366,19 @@ def placeholder_image(message: str, width: int = 1024, height: int = 173) -> np.
 class CaptionGate:
     """Decides, cheaply, whether a frame needs a full OCR pass."""
 
-    WIDTH = 320  # masks are compared at this width
+    # Masks keep a fixed fraction of the ROI's resolution (not a fixed width): with a wide
+    # ROI a fixed width blurred strokes together, so different names of similar length
+    # (e.g. "Александар Вучић" vs "Милош Вучевић") looked "unchanged" and OCR was skipped.
+    SCALE = 0.6
 
     def __init__(self) -> None:
         self.mask: Optional[np.ndarray] = None
+        self.boxes: List[Tuple[int, int, int, int]] = []  # text boxes of the last OCR, mask coords
         self.at = 0.0
 
     def bright_mask(self, roi_bgr: np.ndarray) -> np.ndarray:
         h, w = roi_bgr.shape[:2]
-        small = cv2.resize(roi_bgr, (self.WIDTH, max(1, int(h * self.WIDTH / w))),
+        small = cv2.resize(roi_bgr, (max(1, int(w * self.SCALE)), max(1, int(h * self.SCALE))),
                            interpolation=cv2.INTER_AREA)
         gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
         mask = (gray >= config.TEXT_BRIGHT_LEVEL).astype(np.uint8)
@@ -386,17 +390,38 @@ class CaptionGate:
             return "empty", mask
         fresh = time.time() - self.at < config.FORCE_OCR_EVERY_SEC
         if self.mask is not None and self.mask.shape == mask.shape and fresh:
-            inter = np.logical_and(mask, self.mask).sum()
-            union = np.logical_or(mask, self.mask).sum()
-            if union and inter / union >= config.CAPTION_REUSE_IOU:
+            if self.similarity(mask) >= config.CAPTION_REUSE_IOU:
                 return "reused", mask
         return "ocr", mask
 
-    def remember(self, mask: np.ndarray) -> None:
+    def similarity(self, mask: np.ndarray) -> float:
+        """How unchanged the caption is, 0..1.
+
+        With text boxes from the last OCR: the LOWEST overlap over those boxes, one text line
+        at a time. A whole-mask comparison let a long, unchanged party line hide a changed
+        name line (Vučić vs Vučević scored 0.85), and comparing the whole strip also counted
+        moving bright background (monitors, shirts). Without boxes (no caption last time):
+        whole-mask overlap, which drops as soon as a caption appears."""
+        if not self.boxes:
+            union = np.logical_or(mask, self.mask).sum()
+            return float(np.logical_and(mask, self.mask).sum() / union) if union else 1.0
+        worst = 1.0
+        for x1, y1, x2, y2 in self.boxes:
+            a, b = mask[y1:y2, x1:x2], self.mask[y1:y2, x1:x2]
+            union = np.logical_or(a, b).sum()
+            if union:
+                worst = min(worst, float(np.logical_and(a, b).sum() / union))
+        return worst
+
+    def remember(self, mask: np.ndarray, boxes=()) -> None:
+        """Store the OCR'd frame's mask and its text boxes (ROI pixel coords)."""
+        s, (h, w) = self.SCALE, mask.shape
+        self.boxes = [(max(0, int(x1 * s) - 2), max(0, int(y1 * s) - 2),
+                       min(w, int(x2 * s) + 2), min(h, int(y2 * s) + 2)) for x1, y1, x2, y2 in boxes]
         self.mask, self.at = mask, time.time()
 
     def reset(self) -> None:
-        self.mask, self.at = None, 0.0
+        self.mask, self.boxes, self.at = None, [], 0.0
 
 
 class OCREngine:
@@ -497,7 +522,7 @@ class OCREngine:
         analysis.elapsed_ms = (time.perf_counter() - t0) * 1000
         self._last = analysis
         if mask is not None:
-            self.gate.remember(mask)
+            self.gate.remember(mask, [d.box for d in analysis.detections if d.size_ok])
         return analysis, draw_debug(roi, analysis)
 
 

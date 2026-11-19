@@ -52,14 +52,15 @@ FRAME_STALL_TIMEOUT_SEC = _env("FRAME_STALL_TIMEOUT_SEC", 25.0, float)
 RECONNECT_BACKOFF_SEC = _env("RECONNECT_BACKOFF_SEC", 5.0, float)
 
 # --- Region of interest (fractions of the full frame) ------------------------
-# Calibrated on the real broadcast (Nov 2026): the persistent speaker caption starts at
-# x ~0.28 W; the name line sits at ~0.87-0.94 H and the parliamentary-group line at
+# Calibrated on the real broadcast (Nov 2026). The caption has appeared in two places: left edge
+# at x ~0.28 W (18 Nov) and hugging the bottom-left corner at x ~0.03 W (19 Nov), so the ROI
+# starts at the left edge; the name line sits at ~0.87-0.94 H and the parliamentary-group line at
 # ~0.93-0.99 H (the longest one, "Александар Вучић - Србија побеђује", ends at ~0.73 W).
 # The top edge (0.80 H) also covers the large animated chyron's name line, which the
 # occlusion check needs. A tight ROI is the biggest CPU saving; widen it if the layout changes.
 ROI_Y_START = _env("ROI_Y_START", 0.80, float)
 ROI_Y_END = _env("ROI_Y_END", 1.0, float)
-ROI_X_START = _env("ROI_X_START", 0.22, float)
+ROI_X_START = _env("ROI_X_START", 0.0, float)
 ROI_X_END = _env("ROI_X_END", 0.82, float)
 
 # --- Preprocessing ------------------------------------------------------------
